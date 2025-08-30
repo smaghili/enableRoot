@@ -14,7 +14,13 @@ storage=JSONStorage(config.users_path)
 ai=AIHandler(config.openrouter_key)
 scheduler=ReminderScheduler(db,storage,bot)
 base=os.path.dirname(__file__)
-locales={f.split(".")[0]:json.load(open(os.path.join(base,"localization",f))) for f in os.listdir(os.path.join(base,"localization"))}
+def load_locales():
+ l={}
+ for f in os.listdir(os.path.join(base,"localization")):
+  with open(os.path.join(base,"localization",f)) as d:
+   l[f.split(".")[0]]=json.load(d)
+ return l
+locales=load_locales()
 def t(lang,key):
  return locales.get(lang,locales["en"]).get(key,key)
 @dp.message_handler(commands=["start"])
@@ -39,12 +45,19 @@ async def change_tz(message:types.Message):
 async def handle_message(message:types.Message):
  user_id=message.from_user.id
  data=storage.load(user_id)
- parsed=ai.parse(data["settings"]["language"],data["settings"]["timezone"],message.text)
+ try:
+  parsed=await ai.parse(data["settings"]["language"],data["settings"]["timezone"],message.text)
+ except Exception as e:
+  print(e)
+  await message.answer("error")
+  return
  db.add(user_id,parsed["category"],parsed["content"],parsed["time"])
  storage.add_reminder(user_id,parsed)
  await message.answer(t(data["settings"]["language"],"saved"))
 def main():
  scheduler.start()
  executor.start_polling(dp)
+ scheduler.stop()
+ db.close()
 if __name__=="__main__":
  main()
