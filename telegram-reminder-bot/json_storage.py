@@ -7,10 +7,16 @@ class JSONStorage:
   return os.path.join(self.path,f"{user_id}.json")
  def load(self,user_id):
   p=self.file(user_id)
+  d={"user_id":user_id,"reminders":{"active":[],"completed":[],"cancelled":[]},"settings":{"language":"en","timezone":"+00:00"}}
   if os.path.exists(p):
    with open(p) as f:
-    return json.load(f)
-  return {"user_id":user_id,"reminders":{"active":[],"completed":[],"cancelled":[]},"settings":{"language":"en","timezone":"+00:00"}}
+    try:
+     return json.load(f)
+    except json.JSONDecodeError:
+     with open(p,"w") as w:
+      json.dump(d,w)
+     return d
+  return d
  def save(self,user_id,data):
   with open(self.file(user_id),"w") as f:
    json.dump(data,f)
