@@ -1,21 +1,72 @@
-import aiohttp,json,datetime
+import aiohttp
+import json
+import datetime
+try:
+    import jdatetime
+except ImportError:  # optional Persian calendar
+    jdatetime = None
+
+
+def _parse_tz(tz: str) -> datetime.timedelta:
+    sign = 1 if tz.startswith("+") else -1
+    hours, minutes = tz[1:].split(":")
+    return datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
+
+
 class AIHandler:
- def __init__(self,key):
-  self.key=key
- def fallback(self,text):
-  now=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
-  return {"category":"general","content":text,"time":now}
- async def parse(self,language,timezone,text):
-  headers={"Authorization":f"Bearer {self.key}","Content-Type":"application/json"}
-  prompt=f"language:{language} timezone:{timezone} text:{text}"
-  try:
-   async with aiohttp.ClientSession() as s:
-    async with s.post("https://openrouter.ai/api/v1/chat/completions",headers=headers,json={"model":"gpt-3.5-turbo","messages":[{"role":"system","content":"return json with category content time"},{"role":"user","content":prompt}]}) as r:
-     obj=json.loads((await r.json())["choices"][0]["message"]["content"])
-     return obj
-  except aiohttp.ClientError as e:
-   print(e)
-   return self.fallback(text)
-  except json.JSONDecodeError as e:
-   print(e)
-   return self.fallback(text)
+    def __init__(self, key: str):
+        self.key = key
+
+    def fallback(self, text: str, timezone: str):
+        now = datetime.datetime.utcnow() + _parse_tz(timezone)
+        return {
+            "category": "general",
+            "content": text,
+            "time": now.strftime("%Y-%m-%d %H:%M"),
+            "repeat": "none",
+            "timezone": timezone,
+        }
+
+    async def parse(self, language: str, timezone: str, text: str):
+        headers = {
+            "Authorization": f"Bearer {self.key}",
+            "Content-Type": "application/json",
+        }
+        now = datetime.datetime.utcnow() + _parse_tz(timezone)
+        g_now = now.strftime("%Y-%m-%d %H:%M")
+        p_now = (
+            jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y-%m-%d %H:%M")
+            if jdatetime
+            else "N/A"
+        )
+        prompt = (
+            f"current_gregorian:{g_now} current_persian:{p_now} timezone:{timezone} "
+            f"language:{language} text:{text}. "
+            "Respond in JSON with keys category, content, time, repeat."
+        )
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers=headers,
+                    json={
+                        "model": "gpt-3.5-turbo",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a reminder parser that outputs JSON.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                    },
+                ) as r:
+                    data = await r.json()
+                    obj = json.loads(data["choices"][0]["message"]["content"])
+                    if not all(k in obj for k in ("category", "content", "time")):
+                        raise ValueError("missing keys")
+                    obj.setdefault("repeat", "none")
+                    obj.setdefault("timezone", timezone)
+                    return obj
+        except (aiohttp.ClientError, ValueError, KeyError, json.JSONDecodeError) as e:
+            print(e)
+            return self.fallback(text, timezone)
