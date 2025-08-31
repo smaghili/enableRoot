@@ -295,7 +295,8 @@ async def handle_menu_buttons(message: Message):
     elif action == "settings":
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=message_handler.t(lang, "change_language"), callback_data="change_lang")],
-            [InlineKeyboardButton(text=message_handler.t(lang, "change_timezone"), callback_data="change_tz")]
+            [InlineKeyboardButton(text=message_handler.t(lang, "change_timezone"), callback_data="change_tz")],
+            [InlineKeyboardButton(text=message_handler.t(lang, "change_calendar"), callback_data="change_calendar")]
         ])
         await message.answer(message_handler.t(lang, "settings"), reply_markup=kb)
     elif action == "stats":
@@ -330,6 +331,14 @@ async def handle_timezone_confirmation(callback_query: CallbackQuery):
 @dp.callback_query(F.data == "cancel_tz")
 async def handle_timezone_cancel(callback_query: CallbackQuery):
     await callback_handler.handle_timezone_cancel(callback_query)
+
+@dp.callback_query(F.data == "change_calendar")
+async def handle_change_calendar(callback_query: CallbackQuery):
+    await callback_handler.handle_change_calendar(callback_query)
+
+@dp.callback_query(F.data.startswith("calendar_"))
+async def handle_calendar_selection(callback_query: CallbackQuery):
+    await callback_handler.handle_calendar_selection(callback_query)
 
 @dp.callback_query(F.data.startswith(("stop_", "paid_", "taken_")))
 async def handle_reminder_actions(callback_query: CallbackQuery):

@@ -54,6 +54,7 @@
   "birthday_three_days_before": "📅 3 days until {content}",
   "installment_reminder": "⚠️ Installment reminder: {content}",
   "change_timezone": "🕐 Change Timezone",
+  "change_calendar": "📅 Change Calendar",
   "enter_city_name": "🏙 Please enter your city name:",
   "timezone_confirmation": "🕐 Do you want to change timezone to {city} ({timezone})?",
   "yes": "Yes ✅",
@@ -79,5 +80,10 @@
   "setup_timezone_prompt": "Please enter your city name to set your timezone:\n\n📍 Example: London, New York, Tokyo, Berlin",
   "setup_timezone_confirmation": "🌍 Is your timezone {city} ({timezone})?",
   "setup_complete": "🎉 Setup complete!\n\nYou can now use the reminder bot. To get started, write a reminder or use the menu.",
-  "rate_limit_exceeded": "⚠️ Please wait! You are sending requests too quickly."
+  "rate_limit_exceeded": "⚠️ Please wait! You are sending requests too quickly.",
+  "choose_calendar": "📅 Choose your calendar type:",
+  "calendar_shamsi": "🌞 Persian",
+  "calendar_miladi": "🌍 Gregorian",
+  "calendar_qamari": "🌙 Hijri",
+  "calendar_changed": "✅ Calendar changed to {calendar}"
 }

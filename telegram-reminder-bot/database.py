@@ -175,21 +175,39 @@ class Database:
             cur.close()
             return deleted_count
 
-    def get_stats(self):
+    def get_stats(self, user_id=None):
         with self.lock:
             cur = self.conn.cursor()
-            cur.execute("""
-                select 
-                    count(*) as total,
-                    count(case when status='active' then 1 end) as active,
-                    count(case when status='completed' then 1 end) as completed,
-                    count(case when status='cancelled' then 1 end) as cancelled,
-                    count(distinct user_id) as unique_users
-                from reminders
-            """)
+            if user_id:
+                cur.execute("""
+                    select 
+                        count(*) as total,
+                        count(case when status='active' then 1 end) as active,
+                        count(case when status='completed' then 1 end) as completed,
+                        count(case when status='cancelled' then 1 end) as cancelled,
+                        1 as unique_users
+                    from reminders
+                    where user_id=?
+                """, (user_id,))
+            else:
+                cur.execute("""
+                    select 
+                        count(*) as total,
+                        count(case when status='active' then 1 end) as active,
+                        count(case when status='completed' then 1 end) as completed,
+                        count(case when status='cancelled' then 1 end) as cancelled,
+                        count(distinct user_id) as unique_users
+                    from reminders
+                """)
             result = cur.fetchone()
             cur.close()
-            return result
+            return {
+                'total': result[0],
+                'active': result[1],
+                'completed': result[2],
+                'cancelled': result[3],
+                'unique_users': result[4]
+            }
 
     def close(self):
         with self.lock:

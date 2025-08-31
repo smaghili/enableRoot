@@ -382,18 +382,13 @@ class ReminderCallbackHandler(IMessageHandler):
         await callback_query.answer()
 
     async def handle_exit_edit(self, callback_query: CallbackQuery):
-        """Handle exit edit request"""
         user_id = callback_query.from_user.id
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
-            
-            # Clear editing state completely
             self.session.editing_reminders.pop(user_id, None)
             if user_id in self.session.pending:
                 self.session.pending.pop(user_id)
-            
-            # Restore classic menu
             from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
             kb = ReplyKeyboardMarkup(keyboard=[
                 [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
@@ -402,10 +397,47 @@ class ReminderCallbackHandler(IMessageHandler):
                 [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))],
                 [KeyboardButton(text=self.message_handler.t(lang, "btn_remove_menu"))]
             ], resize_keyboard=True)
-            
             await callback_query.message.answer(self.t(lang, "edit_cancelled"), reply_markup=kb)
-            
         except Exception as e:
             logger.error(f"Error in handle_exit_edit for user {user_id}: {e}")
-        
         await callback_query.answer()
+    async def handle_change_calendar(self, callback_query: CallbackQuery):
+        user_id = callback_query.from_user.id
+        if not self.rate_limit_check(user_id):
+            await self.handle_rate_limit(callback_query)
+            return
+        try:
+            lang = self.storage.load(user_id)["settings"]["language"]
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=self.t(lang, "calendar_shamsi"), callback_data="calendar_shamsi")],
+                [InlineKeyboardButton(text=self.t(lang, "calendar_miladi"), callback_data="calendar_miladi")],
+                [InlineKeyboardButton(text=self.t(lang, "calendar_qamari"), callback_data="calendar_qamari")]
+            ])
+            await callback_query.message.edit_text(self.t(lang, "choose_calendar"), reply_markup=kb)
+            await callback_query.answer()
+        except Exception as e:
+            logger.error(f"Error in handle_change_calendar for user {user_id}: {e}")
+            await callback_query.answer()
+    async def handle_calendar_selection(self, callback_query: CallbackQuery):
+        user_id = callback_query.from_user.id
+        if not self.rate_limit_check(user_id):
+            await self.handle_rate_limit(callback_query)
+            return
+        try:
+            calendar_type = callback_query.data.replace("calendar_", "")
+            data = self.storage.load(user_id)
+            lang = data["settings"]["language"]
+            calendar_names = {
+                "shamsi": self.t(lang, "calendar_shamsi"),
+                "miladi": self.t(lang, "calendar_miladi"),
+                "qamari": self.t(lang, "calendar_qamari")
+            }
+            self.storage.update_setting(user_id, "calendar", calendar_type)
+            calendar_display_name = calendar_names.get(calendar_type, calendar_type)
+            await callback_query.message.edit_text(
+                self.t(lang, "calendar_changed").format(calendar=calendar_display_name)
+            )
+            await callback_query.answer()
+        except Exception as e:
+            logger.error(f"Error in handle_calendar_selection for user {user_id}: {e}")
+            await callback_query.answer()
