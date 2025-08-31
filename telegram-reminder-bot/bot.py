@@ -147,7 +147,14 @@ async def edit_reminder(message: types.Message):
         print(e)
         await message.answer("error")
         return
-    db.update(rid, parsed["category"], parsed["content"], parsed["time"], parsed.get("timezone", tz), parsed.get("repeat", "none"))
+    db.update(
+        rid,
+        parsed["category"],
+        parsed["content"],
+        parsed["time"],
+        parsed.get("timezone", tz),
+        parsed.get("repeat", "none"),
+    )
     parsed["id"] = rid
     parsed.setdefault("timezone", tz)
     parsed.setdefault("repeat", "none")
