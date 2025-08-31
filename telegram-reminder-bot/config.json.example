@@ -1,0 +1,70 @@
+{
+  "database": {
+    "path": "data/reminders.db",
+    "timeout": 30.0,
+    "journal_mode": "WAL",
+    "synchronous": "NORMAL",
+    "cache_size": 10000,
+    "temp_store": "MEMORY"
+  },
+  "bot": {
+    "token": "YOUR_BOT_TOKEN_HERE",
+    "name": "Smart Reminder Bot",
+    "description": "AI-powered reminder bot with multilingual support",
+    "max_requests_per_minute": 20,
+    "rate_limit_window": 60,
+    "max_reminders_per_user": 100,
+    "log_level": "INFO"
+  },
+  "ai": {
+    "openrouter_key": "YOUR_OPENROUTER_API_KEY_HERE",
+    "model": "gpt-4o",
+    "max_tokens": 500,
+    "temperature": 0.1,
+    "timeout": 30.0
+  },
+  "storage": {
+    "users_path": "data/users",
+    "backup_enabled": true,
+    "backup_interval_hours": 24,
+    "cleanup_old_backups": true,
+    "max_backup_files": 7
+  },
+  "security": {
+    "file_permissions": "0o600",
+    "directory_permissions": "0o700",
+    "enable_rate_limiting": true,
+    "enable_input_validation": true,
+    "max_content_length": 1000
+  },
+  "notification": {
+    "strategy": "standard",
+    "max_retries": 3,
+    "retry_delay": 1.0,
+    "enable_silent_mode": false
+  },
+  "constants": {
+    "max_reminder_length": 500,
+    "max_city_length": 50,
+    "session_timeout": 600,
+    "max_button_length": 20,
+    "default_language": "fa",
+    "default_timezone": "+03:30",
+    "default_category": "general",
+    "default_repeat": "{\"type\": \"none\"}",
+    "emoji_mapping": {
+      "birthday": "🎂",
+      "medicine": "💊",
+      "installment": "💳",
+      "work": "💼",
+      "appointment": "📅",
+      "exercise": "🏃‍♂️",
+      "prayer": "🕌",
+      "shopping": "🛒",
+      "call": "📞",
+      "study": "📚",
+      "bill": "💰",
+      "general": "⏰"
+    }
+  }
+}

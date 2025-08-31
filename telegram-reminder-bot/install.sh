@@ -1,19 +1,13 @@
 #!/bin/bash
 
-# Telegram Reminder Bot Installation Script
-# Author: AI Assistant
-# Version: 2.0
-
 set -e
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored output
 print_status() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -33,18 +27,14 @@ print_header() {
     echo
 }
 
-# Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to install Python if not exists
 install_python() {
     if command_exists python3; then
         PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
         print_status "Python $PYTHON_VERSION is already installed"
-        
-        # Check if version is 3.7 or higher
         if python3 -c "import sys; exit(0 if sys.version_info >= (3, 7) else 1)"; then
             print_status "Python version is compatible"
         else
@@ -67,7 +57,6 @@ install_python() {
     fi
 }
 
-# Function to install pip if not exists
 install_pip() {
     if command_exists pip3; then
         print_status "pip3 is already installed"
@@ -86,11 +75,8 @@ install_pip() {
     fi
 }
 
-# Function to install dependencies without venv
 install_dependencies() {
     print_status "Installing dependencies..."
-    
-    # Install requirements
     if [ -f "requirements.txt" ]; then
         python3 -m pip install --user --break-system-packages -r requirements.txt
         print_status "Dependencies installed successfully"
@@ -100,12 +86,10 @@ install_dependencies() {
     fi
 }
 
-# Function to get user input securely
 get_secure_input() {
     local prompt="$1"
     local var_name="$2"
     local is_secret="$3"
-    
     while true; do
         if [ "$is_secret" = "true" ]; then
             echo -n "$prompt"
@@ -115,7 +99,6 @@ get_secure_input() {
             echo -n "$prompt"
             read input
         fi
-        
         if [ -n "$input" ]; then
             eval "$var_name='$input'"
             break
@@ -125,7 +108,6 @@ get_secure_input() {
     done
 }
 
-# Function to validate bot token format
 validate_bot_token() {
     local token="$1"
     if [[ $token =~ ^[0-9]{8,10}:[a-zA-Z0-9_-]{35}$ ]]; then
@@ -135,12 +117,9 @@ validate_bot_token() {
     fi
 }
 
-# Function to collect configuration
 collect_config() {
     print_status "Collecting configuration..."
     echo
-    
-    # Get Bot Token
     while true; do
         get_secure_input "🤖 Enter your Telegram Bot Token (from @BotFather): " BOT_TOKEN false
         if validate_bot_token "$BOT_TOKEN"; then
@@ -151,117 +130,51 @@ collect_config() {
             print_warning "Bot token should look like: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
         fi
     done
-    
     echo
-    
-    # Get OpenRouter Key
     get_secure_input "🔑 Enter your OpenRouter API Key: " OPENROUTER_KEY false
-    
     echo
-    
-    # Optional configurations
-    echo -e "${BLUE}Optional Configuration (press Enter for defaults):${NC}"
-    
-    echo -n "📊 Maximum requests per minute per user (default: 20): "
-    read MAX_REQUESTS
-    MAX_REQUESTS=${MAX_REQUESTS:-20}
-    
-    echo -n "📝 Maximum reminders per user (default: 100): "
-    read MAX_REMINDERS
-    MAX_REMINDERS=${MAX_REMINDERS:-100}
-    
-    echo -n "🧹 Cleanup interval in hours (default: 24): "
-    read CLEANUP_INTERVAL
-    CLEANUP_INTERVAL=${CLEANUP_INTERVAL:-24}
-    
-    echo -n "📋 Log level (INFO/DEBUG/WARNING/ERROR, default: INFO): "
-    read LOG_LEVEL
-    LOG_LEVEL=${LOG_LEVEL:-INFO}
+    print_status "Using default values for all other settings from config.json.example"
 }
 
-# Function to create .env file
-create_env_file() {
-    print_status "Creating .env file..."
-    
-    cat > .env << EOF
-# Telegram Bot Configuration
-BOT_TOKEN=$BOT_TOKEN
-OPENROUTER_KEY=$OPENROUTER_KEY
-
-# Rate Limiting
-MAX_REQUESTS_PER_MINUTE=$MAX_REQUESTS
-MAX_REMINDERS_PER_USER=$MAX_REMINDERS
-
-# System Configuration
-CLEANUP_INTERVAL_HOURS=$CLEANUP_INTERVAL
-LOG_LEVEL=$LOG_LEVEL
-EOF
-
-    # Set secure permissions for .env file
-    chmod 600 .env
-    print_status ".env file created with secure permissions"
+create_config_file() {
+    print_status "Creating config.json file..."
+    if [ ! -f "config.json.example" ]; then
+        print_error "config.json.example not found!"
+        exit 1
+    fi
+    cp config.json.example config.json
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/YOUR_BOT_TOKEN_HERE/$BOT_TOKEN/g" config.json
+        sed -i '' "s/YOUR_OPENROUTER_API_KEY_HERE/$OPENROUTER_KEY/g" config.json
+    else
+        sed -i "s/YOUR_BOT_TOKEN_HERE/$BOT_TOKEN/g" config.json
+        sed -i "s/YOUR_OPENROUTER_API_KEY_HERE/$OPENROUTER_KEY/g" config.json
+    fi
+    chmod 600 config.json
+    print_status "config.json file created with secure permissions"
 }
 
-# Function to create data directories
+
+
 create_directories() {
     print_status "Creating data directories..."
-    
     mkdir -p data/users
     chmod 700 data
     chmod 700 data/users
-    
     print_status "Data directories created with secure permissions"
 }
 
-# Function to test installation
-test_installation() {
-    print_status "Testing installation..."
-    
 
-    
-    # Test Python imports
-    python3 -c "
-import sys
-try:
-    import aiogram
-    import aiohttp
-    import jdatetime
-    print('✅ All required packages imported successfully')
-except ImportError as e:
-    print(f'❌ Import error: {e}')
-    sys.exit(1)
-"
-    
-    # Test configuration with environment variables
-    BOT_TOKEN="$BOT_TOKEN" OPENROUTER_KEY="$OPENROUTER_KEY" python3 -c "
-import os
-import sys
-from config import Config
-try:
-    config = Config()
-    config.validate()
-    print('✅ Configuration is valid')
-except Exception as e:
-    print(f'❌ Configuration error: {e}')
-    sys.exit(1)
-"
-    
-    print_status "Installation test completed successfully"
-}
 
-# Function to create systemd service (optional)
 create_systemd_service() {
     echo
     echo -n "🔧 Do you want to create a systemd service for auto-start? (y/N): "
     read create_service
-    
     if [[ $create_service =~ ^[Yy]$ ]]; then
         print_status "Creating systemd service..."
-        
         SERVICE_FILE="/etc/systemd/system/telegram-reminder-bot.service"
         CURRENT_DIR=$(pwd)
         CURRENT_USER=$(whoami)
-        
         sudo tee $SERVICE_FILE > /dev/null << EOF
 [Unit]
 Description=Telegram Reminder Bot
@@ -279,35 +192,39 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-
         sudo systemctl daemon-reload
         sudo systemctl enable telegram-reminder-bot.service
-        
-        print_status "Systemd service created and enabled"
-        print_status "You can start the bot with: sudo systemctl start telegram-reminder-bot"
+        sudo systemctl start telegram-reminder-bot.service
+        print_status "Systemd service created, enabled and started"
+        print_status "Bot is now running automatically"
         print_status "Check status with: sudo systemctl status telegram-reminder-bot"
+    else
+        print_status "Starting bot manually..."
+        nohup python3 bot.py > bot.log 2>&1 &
+        print_status "Bot started in background (PID: $!)"
+        print_status "Logs are being written to bot.log"
     fi
 }
 
-# Function to show completion message
 show_completion() {
     echo
     echo -e "${GREEN}🎉 Installation completed successfully!${NC}"
     echo
-    echo -e "${BLUE}Next steps:${NC}"
-    echo "1. Start the bot:"
-    echo -e "   ${YELLOW}./run.sh${NC}"
+    echo -e "${BLUE}Installation completed!${NC}"
+    echo "✅ Bot is now running automatically"
     echo
-    echo "2. Or activate virtual environment and run manually:"
-    echo -e "   ${YELLOW}source venv/bin/activate${NC}"
-    echo -e "   ${YELLOW}python bot.py${NC}"
+    echo "If you chose systemd service:"
+    echo "• Bot is running as system service"
+    echo "• Will auto-start on system boot"
+    echo "• Check status: sudo systemctl status telegram-reminder-bot"
     echo
-    echo "3. Run tests (optional):"
-    echo -e "   ${YELLOW}source venv/bin/activate${NC}"
-    echo -e "   ${YELLOW}python run_tests.py${NC}"
+    echo "If you chose manual start:"
+    echo "• Bot is running in background"
+    echo "• Logs: tail -f bot.log"
+    echo "• Stop: kill $(pgrep -f bot.py)"
     echo
     echo -e "${BLUE}Configuration files:${NC}"
-    echo "• .env - Environment variables (keep secure!)"
+    echo "• config.json - Main configuration (keep secure!)"
     echo "• data/ - Database and user data directory"
     echo "• bot.log - Application logs"
     echo
@@ -319,35 +236,24 @@ show_completion() {
     print_status "Happy bot running! 🤖"
 }
 
-# Main installation function
 main() {
     print_header
-    
-
-    
-    # Check if we're in the right directory
     if [ ! -f "bot.py" ] || [ ! -f "requirements.txt" ]; then
         print_error "Please run this script from the telegram-reminder-bot directory"
         print_error "Required files (bot.py, requirements.txt) not found"
         exit 1
     fi
-    
     print_status "Starting installation process..."
-    
-    # Installation steps
     install_python
     install_pip
     install_dependencies
     collect_config
-    create_env_file
+    create_config_file
     create_directories
-    test_installation
     create_systemd_service
     show_completion
 }
 
-# Handle script interruption
 trap 'print_error "Installation interrupted by user"; exit 1' INT
 
-# Run main function
 main "$@"

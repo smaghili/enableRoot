@@ -1,3 +1,18 @@
+# Configuration files with sensitive data
+config.json
+.env
+
+# Database files
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -15,32 +30,45 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 MANIFEST
 
-.env
-.venv
-env/
+# Virtual environments
 venv/
+env/
 ENV/
 env.bak/
 venv.bak/
 
-data/
-*.db
-*.log
-*.sqlite
-*.sqlite3
-
-.DS_Store
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-config_local.py
-secrets.py
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Backup files
+*.bak
+*.backup
+backup/
+
+# User data
+users/
+user_data/

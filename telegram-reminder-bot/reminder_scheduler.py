@@ -4,10 +4,13 @@ import logging
 import os
 from typing import Optional
 from repeat_handler import RepeatHandler
+from interfaces import IScheduler, INotificationService
+from notification_strategies import NotificationContext, NotificationStrategyFactory
+from reminder_types import ReminderFactory
 
 
-class ReminderScheduler:
-    def __init__(self, db, json_storage, bot):
+class ReminderScheduler(IScheduler):
+    def __init__(self, db, json_storage, bot, notification_context: Optional[NotificationContext] = None):
         self.db = db
         self.json_storage = json_storage
         self.bot = bot
@@ -16,6 +19,13 @@ class ReminderScheduler:
         self.processing_semaphore = asyncio.Semaphore(30)
         self.logger = logging.getLogger(__name__)
         self.repeat_handler = RepeatHandler()
+        self.reminder_factory = ReminderFactory()
+        
+        # Use dependency injection for notification strategy
+        self.notification_context = notification_context or NotificationContext(
+            NotificationStrategyFactory.create("standard")
+        )
+        
         self._load_locales()
         
     def _load_locales(self):
@@ -50,6 +60,14 @@ class ReminderScheduler:
     async def _loop(self):
         while True:
             try:
+                # Check if database connection is still open
+                try:
+                    with self.db.lock:
+                        self.db.conn.execute("SELECT 1")
+                except Exception as e:
+                    self.logger.error(f"Database connection lost: {e}")
+                    break
+                    
                 now = datetime.datetime.utcnow()
                 due_reminders = self.db.due(now, limit=500)
                 
@@ -93,12 +111,16 @@ class ReminderScheduler:
                     self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
                 else:
                     # Get timezone for this reminder
-                    cur = self.db.conn.cursor()
-                    cur.execute("select timezone from reminders where id=?", (rid,))
-                    row = cur.fetchone()
-                    cur.close()
-
-                    tz = row[0] if row else "+00:00"
+                    try:
+                        with self.db.lock:
+                            cur = self.db.conn.cursor()
+                            cur.execute("select timezone from reminders where id=?", (rid,))
+                            row = cur.fetchone()
+                            cur.close()
+                        tz = row[0] if row else "+00:00"
+                    except Exception as e:
+                        self.logger.error(f"Error getting timezone for reminder {rid}: {e}")
+                        tz = "+00:00"
                     new_time = self._next_time(time_str, repeat, tz)
                     if new_time:
                         self.db.update_time(rid, new_time)
@@ -117,6 +139,15 @@ class ReminderScheduler:
         while True:
             try:
                 await asyncio.sleep(3600)
+                
+                # Check if database connection is still open
+                try:
+                    with self.db.lock:
+                        self.db.conn.execute("SELECT 1")
+                except Exception as e:
+                    self.logger.error(f"Database connection lost in cleanup: {e}")
+                    break
+                    
                 deleted = self.db.cleanup_old_reminders(30)
                 if deleted > 0:
                     self.logger.info(f"Cleaned up {deleted} old reminders")
@@ -128,8 +159,6 @@ class ReminderScheduler:
                 self.logger.error(f"Cleanup error: {e}")
 
     async def _send_reminder(self, rid, uid, category, content, repeat):
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
         try:
             user_lang = self.json_storage.get_user_language(uid)
             safe_content = str(content)[:500] if content else "No content"
@@ -138,56 +167,22 @@ class ReminderScheduler:
             user_lang = "en"
             safe_content = str(content)[:500] if content else "No content"
         
-        try:
-            if category == "birthday":
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton(self.t(user_lang, "reminder_stopped"), 
-                                          callback_data=f"stop_{rid}"))
-                await self.bot.send_message(uid, f"🎂 {safe_content}", reply_markup=kb)
-            
-            elif category == "birthday_pre_week":
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton(self.t(user_lang, "reminder_stopped"), 
-                                          callback_data=f"stop_{rid}"))
-                message_text = self.t(user_lang, "birthday_week_before", content=safe_content)
-                await self.bot.send_message(uid, message_text, reply_markup=kb)
-            
-            elif category == "birthday_pre_three":
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton(self.t(user_lang, "reminder_stopped"), 
-                                          callback_data=f"stop_{rid}"))
-                message_text = self.t(user_lang, "birthday_three_days_before", content=safe_content)
-                await self.bot.send_message(uid, message_text, reply_markup=kb)
-            
-            elif category == "installment":
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton(self.t(user_lang, "payment_recorded"), 
-                                          callback_data=f"paid_{rid}"))
-                kb.add(InlineKeyboardButton(self.t(user_lang, "reminder_stopped"), 
-                                          callback_data=f"stop_{rid}"))
-                await self.bot.send_message(uid, f"💳 {safe_content}", reply_markup=kb)
-            
-            elif category == "installment_followup":
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton(self.t(user_lang, "payment_recorded"), 
-                                          callback_data=f"paid_{rid}"))
-                kb.add(InlineKeyboardButton(self.t(user_lang, "reminder_stopped"), 
-                                          callback_data=f"stop_{rid}"))
-                message_text = self.t(user_lang, "installment_reminder", content=safe_content)
-                await self.bot.send_message(uid, message_text, reply_markup=kb)
-            
-            elif category == "medicine":
-                kb = InlineKeyboardMarkup()
-                kb.add(InlineKeyboardButton(self.t(user_lang, "medicine_taken"), 
-                                          callback_data=f"taken_{rid}"))
-                await self.bot.send_message(uid, f"💊 {safe_content}", reply_markup=kb)
-            
-            else:
-                await self.bot.send_message(uid, f"⏰ {safe_content}")
-                
-        except Exception as e:
-            self.logger.error(f"Error sending reminder {rid} to user {uid}: {e}")
-            raise
+        # Prepare reminder data for notification strategy
+        reminder_data = {
+            'id': rid,
+            'category': category,
+            'content': safe_content,
+            'repeat': repeat
+        }
+        
+        # Use notification strategy to send reminder
+        success = await self.notification_context.send_notification(
+            self.bot, uid, reminder_data, user_lang, self.t
+        )
+        
+        if not success:
+            self.logger.error(f"Failed to send reminder {rid} to user {uid}")
+            raise Exception(f"Notification failed for reminder {rid}")
 
     def _next_time(self, time_str: str, repeat: str, timezone: str = "+00:00") -> Optional[str]:
         try:
