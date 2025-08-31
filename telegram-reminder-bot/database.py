@@ -38,6 +38,26 @@ class Database:
                 "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
                 (user_id, category, content, time, timezone, repeat, status),
             )
+            
+            # For birthdays, add pre-reminders
+            if category == "birthday" and repeat == "yearly":
+                dt = datetime.datetime.strptime(time, "%Y-%m-%d %H:%M")
+                
+                # 1 week before
+                week_before = dt - datetime.timedelta(days=7)
+                self.conn.execute(
+                    "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
+                    (user_id, "birthday_pre", f"📅 1 هفته تا {content}", 
+                     week_before.strftime("%Y-%m-%d %H:%M"), timezone, "yearly", status),
+                )
+                
+                # 3 days before  
+                three_days_before = dt - datetime.timedelta(days=3)
+                self.conn.execute(
+                    "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
+                    (user_id, "birthday_pre", f"📅 3 روز تا {content}", 
+                     three_days_before.strftime("%Y-%m-%d %H:%M"), timezone, "yearly", status),
+                )
 
     def list(self, user_id, status="active"):
         with self.lock:

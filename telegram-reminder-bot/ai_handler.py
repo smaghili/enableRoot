@@ -19,6 +19,14 @@ class AIHandler:
 
     def fallback(self, text: str, timezone: str):
         now = datetime.datetime.utcnow() + _parse_tz(timezone)
+        # Try to extract time from text
+        import re
+        time_match = re.search(r'(\d{1,2}):?(\d{2})?', text)
+        if time_match:
+            hour = int(time_match.group(1))
+            minute = int(time_match.group(2)) if time_match.group(2) else 0
+            now = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
         return {
             "category": "general",
             "content": text,
@@ -39,11 +47,23 @@ class AIHandler:
             if jdatetime
             else "N/A"
         )
-        prompt = (
-            f"current_gregorian:{g_now} current_persian:{p_now} timezone:{timezone} "
-            f"language:{language} text:{text}. "
-            "Respond in JSON with keys category, content, time, repeat."
-        )
+        prompt = f"""
+You are a Persian/Arabic/Russian/English reminder parser. Current time: {g_now} (Gregorian), {p_now} (Persian), timezone: {timezone}, user language: {language}.
+
+Parse this text: "{text}"
+
+Categories: birthday, medicine, appointment, work, exercise, prayer, shopping, call, study, installment, bill, general
+
+Time formats: YYYY-MM-DD HH:MM
+Repeat options: none, daily, weekly, monthly, yearly
+
+Examples:
+- "هر روز ساعت 10 قرص" → {{"category": "medicine", "content": "قرص بخورم", "time": "YYYY-MM-DD 10:00", "repeat": "daily"}}
+- "28 خرداد تولد مائده" → {{"category": "birthday", "content": "تولد مائده", "time": "YYYY-MM-DD 08:00", "repeat": "yearly"}}
+- "هر ماه 15 قسط ماشین" → {{"category": "installment", "content": "قسط ماشین", "time": "YYYY-MM-15 09:00", "repeat": "monthly"}}
+
+Respond ONLY with valid JSON containing: category, content, time, repeat
+        """
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.post(
