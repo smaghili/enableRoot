@@ -1,24 +1,26 @@
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.filters import Command
-from config import Config
+
+# Local imports
+from config.config import Config
 from database import Database
-from json_storage import JSONStorage
-from ai_handler import AIHandler
-from reminder_scheduler import ReminderScheduler
-from repeat_handler import RepeatHandler
-from message_handlers import ReminderMessageHandler
-from callback_handlers import ReminderCallbackHandler
-from admin_handler import AdminHandler
-from config import Config
-from date_converter import DateConverter
+from utils.json_storage import JSONStorage
+from handlers.ai_handler import AIHandler
+from services.reminder_scheduler import ReminderScheduler
+from handlers.repeat_handler import RepeatHandler
+from handlers.message_handlers import ReminderMessageHandler
+from handlers.callback_handlers import ReminderCallbackHandler
+from handlers.admin_handler import AdminHandler
+from utils.date_converter import DateConverter
+from utils.security_utils import create_secure_directory, secure_file_permissions
+
 import json
 import os
 import datetime
 import asyncio
 import logging
 import time
-from security_utils import create_secure_directory, secure_file_permissions
 
 logging.basicConfig(
     level=logging.INFO,
