@@ -4,9 +4,9 @@ import logging
 import time
 import datetime
 import json
-from config import Config
-from interfaces import IMessageHandler
-from date_converter import DateConverter
+from config.config import Config
+from config.interfaces import IMessageHandler
+from utils.date_converter import DateConverter
 try:
     import jdatetime
 except ImportError:
@@ -236,9 +236,33 @@ class ReminderCallbackHandler(IMessageHandler):
         try:
             if action == "stop":
                 self.db.update_status(reminder_id, "cancelled")
+                if reminder_id:
+                    try:
+                        with self.db.lock:
+                            cur = self.db.conn.cursor()
+                            cur.execute(
+                                "UPDATE reminders SET status='cancelled' WHERE category='installment_retry' AND content LIKE ?",
+                                (f"%{reminder_id}%",)
+                            )
+                            self.db.conn.commit()
+                            cur.close()
+                    except Exception as e:
+                        logger.error(f"Error cancelling retry reminders for {reminder_id}: {e}")
                 await callback_query.message.edit_text(self.t(lang, "reminder_stopped"))
             elif action == "paid":
                 self.db.update_status(reminder_id, "completed")
+                if reminder_id:
+                    try:
+                        with self.db.lock:
+                            cur = self.db.conn.cursor()
+                            cur.execute(
+                                "UPDATE reminders SET status='cancelled' WHERE category='installment_retry' AND content LIKE ?",
+                                (f"%{reminder_id}%",)
+                            )
+                            self.db.conn.commit()
+                            cur.close()
+                    except Exception as e:
+                        logger.error(f"Error cancelling retry reminders for {reminder_id}: {e}")
                 await callback_query.message.edit_text(self.t(lang, "payment_recorded"))
             elif action == "taken":
                 await callback_query.message.edit_text(self.t(lang, "medicine_taken"))

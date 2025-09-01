@@ -56,7 +56,7 @@ class BirthdayReminder(ReminderType):
     
     def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t_func(lang, "reminder_stopped"), 
+            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
                                 callback_data=f"stop_{reminder_id}")]
         ])
     
@@ -76,9 +76,9 @@ class InstallmentReminder(ReminderType):
     
     def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t_func(lang, "payment_recorded"), 
+            [InlineKeyboardButton(text=t_func(lang, "installment_paid"), 
                                 callback_data=f"paid_{reminder_id}")],
-            [InlineKeyboardButton(text=t_func(lang, "reminder_stopped"), 
+            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
                                 callback_data=f"stop_{reminder_id}")]
         ])
     
@@ -123,6 +123,28 @@ class GeneralReminder(ReminderType):
         return len(content.strip()) > 0
 
 
+class InstallmentRetryReminder(ReminderType):
+    def get_emoji(self) -> str:
+        return "💳⚠️"
+    
+    def get_category_name(self) -> str:
+        return "installment_retry"
+    
+    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t_func(lang, "installment_paid"), 
+                                callback_data=f"paid_{reminder_id}")],
+            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
+                                callback_data=f"stop_{reminder_id}")]
+        ])
+    
+    def format_message(self, content: str, lang: str, t_func) -> str:
+        return f"💳⚠️ {t_func(lang, 'installment_reminder_retry')}: {content}"
+    
+    def validate_content(self, content: str) -> bool:
+        return len(content.strip()) > 0
+
+
 class ReminderFactory:
     """Factory for creating reminder type instances"""
     
@@ -130,6 +152,7 @@ class ReminderFactory:
         "medicine": MedicineReminder,
         "birthday": BirthdayReminder,
         "installment": InstallmentReminder,
+        "installment_retry": InstallmentRetryReminder,
         "work": WorkReminder,
         "general": GeneralReminder,
         "appointment": WorkReminder,  # Reuse work reminder

@@ -5,9 +5,9 @@ import logging
 import time
 import datetime
 import json
-from config import Config
-from interfaces import IMessageHandler
-from date_converter import DateConverter
+from config.config import Config
+from config.interfaces import IMessageHandler
+from utils.date_converter import DateConverter
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +186,7 @@ class ReminderMessageHandler(IMessageHandler):
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
-            
-            # Get the reminder being edited
+    
             reminder_id = self.session.editing_reminders[user_id]
             
             # Get current reminder details

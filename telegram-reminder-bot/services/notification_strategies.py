@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 import logging
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
-from reminder_types import ReminderFactory
+from services.reminder_types import ReminderFactory
 
 
 class NotificationStrategy(ABC):

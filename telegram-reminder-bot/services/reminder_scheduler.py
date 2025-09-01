@@ -3,10 +3,10 @@ import datetime
 import logging
 import os
 from typing import Optional
-from repeat_handler import RepeatHandler
-from interfaces import IScheduler, INotificationService
-from notification_strategies import NotificationContext, NotificationStrategyFactory
-from reminder_types import ReminderFactory
+from handlers.repeat_handler import RepeatHandler
+from config.interfaces import IScheduler, INotificationService
+from services.notification_strategies import NotificationContext, NotificationStrategyFactory
+from services.reminder_types import ReminderFactory
 
 
 class ReminderScheduler(IScheduler):
@@ -30,7 +30,7 @@ class ReminderScheduler(IScheduler):
         
     def _load_locales(self):
         self.locales = {}
-        base_path = os.path.dirname(__file__)
+        base_path = os.path.dirname(os.path.dirname(__file__))  # Go up one level from services/
         locale_dir = os.path.join(base_path, "localization")
         
         if os.path.exists(locale_dir):
@@ -106,7 +106,11 @@ class ReminderScheduler(IScheduler):
         async with self.processing_semaphore:
             try:
                 await self._send_reminder(rid, uid, cat, content, repeat)
-                if repeat == "none":
+                
+                # Handle installment special case
+                if cat == "installment":
+                    await self._handle_installment_reminder(rid, uid, time_str, repeat)
+                elif repeat == "none":
                     self.db.update_status(rid, "completed")
                     self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
                 else:
@@ -134,6 +138,49 @@ class ReminderScheduler(IScheduler):
                     self.db.update_status(rid, "cancelled")
                 except Exception as db_error:
                     self.logger.error(f"Failed to cancel reminder {rid}: {db_error}")
+
+    async def _handle_installment_reminder(self, rid, uid, time_str, repeat):
+        """Handle special logic for installment reminders - repeat for 3 days if not paid"""
+        try:
+            # Check how many times this installment has been sent
+            with self.db.lock:
+                cur = self.db.conn.cursor()
+                cur.execute(
+                    "select count(*) from reminders where user_id=? and category='installment_retry' and content like ?",
+                    (uid, f"%{rid}%")
+                )
+                retry_count = cur.fetchone()[0] if cur.fetchone() else 0
+                cur.close()
+            
+            if retry_count < 3:
+                # Create retry reminder for next day
+                dt_local = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+                next_day = dt_local + datetime.timedelta(days=1)
+                
+                # Add retry reminder
+                self.db.add(
+                    uid,
+                    "installment_retry", 
+                    f"Retry #{retry_count + 1} for reminder {rid}",
+                    next_day.strftime("%Y-%m-%d %H:%M"),
+                    "+00:00",  # Will be converted properly
+                    '{"type": "none"}'
+                )
+                self.logger.info(f"Created installment retry {retry_count + 1} for reminder {rid}")
+            else:
+                # After 3 retries, continue with normal recurring pattern
+                if repeat != "none":
+                    new_time = self._next_time(time_str, repeat, "+00:00")
+                    if new_time:
+                        self.db.update_time(rid, new_time)
+                        self.logger.info(f"Updated installment reminder {rid} to next cycle: {new_time}")
+                    else:
+                        self.db.update_status(rid, "cancelled")
+                else:
+                    self.db.update_status(rid, "completed")
+                    
+        except Exception as e:
+            self.logger.error(f"Error handling installment reminder {rid}: {e}")
 
     async def _cleanup_loop(self):
         while True:
