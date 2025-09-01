@@ -79,9 +79,10 @@ class ReminderMessageHandler(IMessageHandler):
             "btn_list": "list",
             "btn_delete": "delete",
             "btn_edit": "edit",
-                    "btn_new": "new",
-        "btn_settings": "settings",
-        "btn_stats": "stats"
+            "btn_new": "new",
+            "btn_settings": "settings",
+            "btn_stats": "stats",
+            "btn_admin": "admin"
         }
         for key, action in button_mappings.items():
             if message_text == self.t(user_lang, key):

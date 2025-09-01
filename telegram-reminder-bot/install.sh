@@ -117,6 +117,15 @@ validate_bot_token() {
     fi
 }
 
+validate_admin_id() {
+    local admin_id="$1"
+    if [[ $admin_id =~ ^[0-9]+$ ]] && [ ${#admin_id} -ge 5 ] && [ ${#admin_id} -le 12 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 collect_config() {
     print_status "Collecting configuration..."
     echo
@@ -133,6 +142,17 @@ collect_config() {
     echo
     get_secure_input "🔑 Enter your OpenRouter API Key: " OPENROUTER_KEY false
     echo
+    while true; do
+        get_secure_input "👑 Enter your Telegram User ID (admin): " ADMIN_ID false
+        if validate_admin_id "$ADMIN_ID"; then
+            print_status "Admin ID format is valid"
+            break
+        else
+            print_error "Invalid admin ID format. Must be 5-12 digits."
+            print_warning "To get your ID, send /start to @userinfobot on Telegram"
+        fi
+    done
+    echo
     print_status "Using default values for all other settings from config.json.example"
 }
 
@@ -146,12 +166,15 @@ create_config_file() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
         sed -i '' "s/YOUR_BOT_TOKEN_HERE/$BOT_TOKEN/g" config.json
         sed -i '' "s/YOUR_OPENROUTER_API_KEY_HERE/$OPENROUTER_KEY/g" config.json
+        sed -i '' "s/123456789/$ADMIN_ID/g" config.json
     else
         sed -i "s/YOUR_BOT_TOKEN_HERE/$BOT_TOKEN/g" config.json
         sed -i "s/YOUR_OPENROUTER_API_KEY_HERE/$OPENROUTER_KEY/g" config.json
+        sed -i "s/123456789/$ADMIN_ID/g" config.json
     fi
     chmod 644 config.json
     print_status "config.json file created with secure permissions"
+    print_status "Admin ID $ADMIN_ID has been configured as bot administrator"
 }
 
 

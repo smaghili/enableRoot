@@ -14,7 +14,12 @@
     "max_requests_per_minute": 20,
     "rate_limit_window": 60,
     "max_reminders_per_user": 100,
-    "log_level": "INFO"
+    "log_level": "INFO",
+    "admin_ids": [123456789],
+    "forced_join": {
+      "enabled": false,
+      "channels": []
+    }
   },
   "ai": {
     "openrouter_key": "YOUR_OPENROUTER_API_KEY_HERE",

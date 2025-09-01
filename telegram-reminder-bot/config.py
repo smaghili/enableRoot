@@ -40,6 +40,9 @@ class Config:
             "study": "📚", "bill": "💰", "general": "⏰"
         })
         
+        self.admin_ids: list = self.config_data.get("bot", {}).get("admin_ids", [])
+        self.forced_join: dict = self.config_data.get("bot", {}).get("forced_join", {"enabled": False, "channels": []})
+        
     def _load_config(self) -> dict:
         config_file = "config.json"
         if os.path.exists(config_file):

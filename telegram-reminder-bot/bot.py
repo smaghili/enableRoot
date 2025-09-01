@@ -9,6 +9,7 @@ from reminder_scheduler import ReminderScheduler
 from repeat_handler import RepeatHandler
 from message_handlers import ReminderMessageHandler
 from callback_handlers import ReminderCallbackHandler
+from admin_handler import AdminHandler
 from config import Config
 from date_converter import DateConverter
 import json
@@ -82,6 +83,7 @@ session = UserSession()
 
 message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config)
 callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config)
+admin_handler = AdminHandler(storage, db, bot, config, locales)
 
 @dp.message(Command("start"))
 async def start_message(message: Message):
@@ -89,6 +91,15 @@ async def start_message(message: Message):
     if not message_handler.rate_limit_check(user_id):
         await message_handler.handle_rate_limit(message)
         return
+    
+    if config.forced_join.get("enabled", False):
+        if not await admin_handler.check_user_membership(user_id):
+            data = storage.load(user_id)
+            lang = data["settings"]["language"]
+            kb = await admin_handler.get_join_keyboard(lang)
+            await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
+            return
+    
     try:
         data = storage.load(user_id)
         is_new_user = not data["settings"].get("setup_complete", False)
@@ -113,12 +124,18 @@ async def start_message(message: Message):
         else:
             lang = data["settings"]["language"]
             await message.answer(message_handler.t(lang, "start"))
-            kb = ReplyKeyboardMarkup(keyboard=[
+            
+            keyboard = [
                 [KeyboardButton(text=message_handler.t(lang, "btn_new"))],
                 [KeyboardButton(text=message_handler.t(lang, "btn_delete")), KeyboardButton(text=message_handler.t(lang, "btn_edit"))],
                 [KeyboardButton(text=message_handler.t(lang, "btn_list"))],
                 [KeyboardButton(text=message_handler.t(lang, "btn_settings")), KeyboardButton(text=message_handler.t(lang, "btn_stats"))]
-            ], resize_keyboard=True)
+            ]
+            
+            if admin_handler.is_admin(user_id):
+                keyboard.append([KeyboardButton(text=message_handler.t(lang, "btn_admin"))])
+            
+            kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
             await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
         storage.save(user_id, data)
     except Exception as e:
@@ -274,12 +291,18 @@ async def show_menu(message: Message):
     except Exception as e:
         logger.error(f"Error in show_menu for user {user_id}: {e}")
         return
-    kb = ReplyKeyboardMarkup(keyboard=[
+    
+    keyboard = [
         [KeyboardButton(text=message_handler.t(lang, "btn_new"))],
         [KeyboardButton(text=message_handler.t(lang, "btn_delete")), KeyboardButton(text=message_handler.t(lang, "btn_edit"))],
         [KeyboardButton(text=message_handler.t(lang, "btn_list"))],
         [KeyboardButton(text=message_handler.t(lang, "btn_settings")), KeyboardButton(text=message_handler.t(lang, "btn_stats"))]
-    ], resize_keyboard=True)
+    ]
+    
+    if admin_handler.is_admin(user_id):
+        keyboard.append([KeyboardButton(text=message_handler.t(lang, "btn_admin"))])
+    
+    kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
     await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
 
 @dp.message(F.text)
@@ -288,8 +311,38 @@ async def handle_menu_buttons(message: Message):
     if not message_handler.rate_limit_check(user_id):
         await message_handler.handle_rate_limit(message)
         return
+    
+    if config.forced_join.get("enabled", False) and not admin_handler.is_admin(user_id):
+        if not await admin_handler.check_user_membership(user_id):
+            data = storage.load(user_id)
+            lang = data["settings"]["language"]
+            kb = await admin_handler.get_join_keyboard(lang)
+            await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
+            return
+    
     try:
         lang = storage.load(user_id)["settings"]["language"]
+        
+        if message.text == message_handler.t(lang, "btn_admin") and admin_handler.is_admin(user_id):
+            await admin_handler.show_admin_panel(message)
+            return
+        
+        if admin_handler.is_admin(user_id) and admin_handler.is_admin_button(message.text, lang):
+            await admin_handler.handle_admin_button(message)
+            return
+            
+        if admin_handler.is_admin(user_id) and admin_handler.is_forced_join_button(message.text, lang):
+            await admin_handler.handle_forced_join_button(message)
+            return
+        
+        if (user_id in admin_handler.waiting_for_admin_id or 
+            user_id in admin_handler.waiting_for_broadcast or 
+            user_id in admin_handler.waiting_for_private_message or 
+            user_id in admin_handler.waiting_for_channel or
+            user_id in admin_handler.waiting_for_limit):
+            await admin_handler.handle_admin_message(message)
+            return
+        
         action = message_handler.get_button_action(message.text, lang)
         if action is None:
             await message_handler.handle_message(message)
@@ -368,6 +421,42 @@ async def handle_edit_selection(callback_query: CallbackQuery):
 @dp.callback_query(F.data == "exit_edit")
 async def handle_exit_edit(callback_query: CallbackQuery):
     await callback_handler.handle_exit_edit(callback_query)
+
+
+
+@dp.callback_query(F.data.startswith(("remove_admin_", "confirm_remove_", "cancel_remove")))
+async def handle_admin_removal_callbacks(callback_query: CallbackQuery):
+    await admin_handler.handle_admin_removal_callback(callback_query)
+
+@dp.callback_query(F.data == "check_membership")
+async def handle_check_membership(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    
+    if await admin_handler.check_user_membership(user_id):
+        data = storage.load(user_id)
+        lang = data["settings"]["language"]
+        await callback_query.message.delete()
+        await callback_query.message.answer(message_handler.t(lang, "start"))
+        
+        keyboard = [
+            [KeyboardButton(text=message_handler.t(lang, "btn_new"))],
+            [KeyboardButton(text=message_handler.t(lang, "btn_delete")), KeyboardButton(text=message_handler.t(lang, "btn_edit"))],
+            [KeyboardButton(text=message_handler.t(lang, "btn_list"))],
+            [KeyboardButton(text=message_handler.t(lang, "btn_settings")), KeyboardButton(text=message_handler.t(lang, "btn_stats"))]
+        ]
+        
+        if admin_handler.is_admin(user_id):
+            keyboard.append([KeyboardButton(text=message_handler.t(lang, "btn_admin"))])
+        
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        await callback_query.message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
+    else:
+        data = storage.load(user_id)
+        lang = data["settings"]["language"]
+        kb = await admin_handler.get_join_keyboard(lang)
+        await callback_query.message.edit_reply_markup(reply_markup=kb)
+    
+    await callback_query.answer()
 
 async def cleanup_memory():
     while True:

@@ -89,3 +89,15 @@ class JSONStorage:
                 return text
         except (FileNotFoundError, json.JSONDecodeError):
             return key
+            
+    def get_all_users(self):
+        users = []
+        for filename in os.listdir(self.path):
+            if filename.endswith('.json'):
+                try:
+                    user_id = int(filename[:-5])
+                    data = self.load(user_id)
+                    users.append(data)
+                except (ValueError, Exception):
+                    continue
+        return users

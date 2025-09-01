@@ -209,6 +209,49 @@ class Database:
                 'unique_users': result[4]
             }
 
+    def get_admin_stats(self):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("""
+                select 
+                    count(distinct user_id) as total_users,
+                    count(*) as total_reminders,
+                    count(case when status='active' then 1 end) as active_reminders
+                from reminders
+            """)
+            basic_stats = cur.fetchone()
+            
+            cur.execute("""
+                select category, count(*) as count
+                from reminders 
+                where status != 'cancelled'
+                group by category 
+                order by count desc 
+                limit 1
+            """)
+            top_category = cur.fetchone()
+            
+            cur.execute("""
+                select user_id, count(*) as count
+                from reminders 
+                where status != 'cancelled'
+                group by user_id 
+                order by count desc 
+                limit 1
+            """)
+            top_user = cur.fetchone()
+            
+            cur.close()
+            return {
+                'total_users': basic_stats[0],
+                'total_reminders': basic_stats[1], 
+                'active_reminders': basic_stats[2],
+                'top_category': top_category[0] if top_category else None,
+                'top_category_count': top_category[1] if top_category else 0,
+                'top_user_id': top_user[0] if top_user else None,
+                'top_user_count': top_user[1] if top_user else 0
+            }
+
     def close(self):
         with self.lock:
             self.conn.close()
