@@ -24,8 +24,14 @@ class ReminderMessageHandler(IMessageHandler):
         self.user_message_count = {}
         self.waiting_for_city = {}
 
-    def t(self, lang, key):
-        return self.locales.get(lang, self.locales["en"]).get(key, key)
+    def t(self, lang, key, **kwargs):
+        text = self.locales.get(lang, self.locales["en"]).get(key, key)
+        if kwargs:
+            try:
+                text = text.format(**kwargs)
+            except (KeyError, ValueError):
+                pass
+        return text
 
     def rate_limit_check(self, user_id: int) -> bool:
         now = time.time()
@@ -113,7 +119,13 @@ class ReminderMessageHandler(IMessageHandler):
                 await message.answer(self.t(lang, "parse_error"))
                 return
             if not parsed.get("reminders") or len(parsed["reminders"]) == 0:
-                error_message = self.t(lang, parsed.get("message") or "ai_error")
+                message_key = parsed.get("message") or "ai_error"
+                if message_key == "past_date_error":
+                    error_message = self.t(lang, message_key, 
+                                         detected_date=parsed.get("detected_date", ""), 
+                                         current_date=parsed.get("current_date", ""))
+                else:
+                    error_message = self.t(lang, message_key)
                 await message.answer(error_message)
                 return
                 

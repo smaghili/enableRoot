@@ -85,5 +85,6 @@
   "calendar_shamsi": "🌞 Persian",
   "calendar_miladi": "🌍 Gregorian",
   "calendar_qamari": "🌙 Hijri",
-  "calendar_changed": "✅ Calendar changed to {calendar}"
+  "calendar_changed": "✅ Calendar changed to {calendar}",
+  "past_date_error": "⚠️ The detected date is in the past!\n\n📅 Detected date: {detected_date}\n🕐 Current time: {current_date}\n\nReminder date must be in the future."
 }

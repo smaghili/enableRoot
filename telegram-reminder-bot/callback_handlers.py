@@ -3,12 +3,15 @@ from typing import Dict, Any
 import logging
 import time
 import datetime
+import json
 from config import Config
 from interfaces import IMessageHandler
 from date_converter import DateConverter
-
+try:
+    import jdatetime
+except ImportError:
+    jdatetime = None
 logger = logging.getLogger(__name__)
-
 class ReminderCallbackHandler(IMessageHandler):
     def __init__(self, storage, db, ai, repeat_handler, locales, message_handler, session, config):
         self.storage = storage
@@ -20,10 +23,51 @@ class ReminderCallbackHandler(IMessageHandler):
         self.session = session
         self.config = config
         self.user_request_times = {}
-
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
-
+    def _calculate_correct_time(self, reminder_data: dict, user_calendar: str) -> str:
+        now = datetime.datetime.now()
+        repeat_data = reminder_data.get("repeat", {})
+        if isinstance(repeat_data, str):
+            repeat_data = json.loads(repeat_data) if repeat_data.startswith("{") else {"type": repeat_data}
+        repeat_type = repeat_data.get("type", "none")
+        if repeat_type == "monthly" and "day" in repeat_data:
+            target_day = repeat_data["day"]
+            if user_calendar == "shamsi" and jdatetime:
+                shamsi_now = jdatetime.datetime.fromgregorian(datetime=now)
+                current_day = shamsi_now.day
+                if target_day <= current_day:
+                    if shamsi_now.month == 12:
+                        next_month = shamsi_now.replace(year=shamsi_now.year + 1, month=1, day=target_day)
+                    else:
+                        next_month = shamsi_now.replace(month=shamsi_now.month + 1, day=target_day)
+                else:
+                    next_month = shamsi_now.replace(day=target_day)
+                gregorian_date = next_month.togregorian()
+                return f"{gregorian_date.year}-{gregorian_date.month:02d}-{gregorian_date.day:02d} {now.hour:02d}:{now.minute:02d}"
+            else:
+                current_day = now.day
+                if target_day <= current_day:
+                    if now.month == 12:
+                        next_month = now.replace(year=now.year + 1, month=1, day=target_day)
+                    else:
+                        next_month = now.replace(month=now.month + 1, day=target_day)
+                else:
+                    next_month = now.replace(day=target_day)
+                return next_month.strftime("%Y-%m-%d %H:%M")
+        elif repeat_type == "interval":
+            value = repeat_data.get("value", 0)
+            unit = repeat_data.get("unit", "minutes")
+            if unit == "minutes":
+                next_time = now + datetime.timedelta(minutes=value)
+            elif unit == "hours":
+                next_time = now + datetime.timedelta(hours=value)
+            elif unit == "days":
+                next_time = now + datetime.timedelta(days=value)
+            else:
+                next_time = now
+            return next_time.strftime("%Y-%m-%d %H:%M")
+        return reminder_data.get("time", now.strftime("%Y-%m-%d %H:%M"))
     def rate_limit_check(self, user_id: int) -> bool:
         now = time.time()
         user_times = self.user_request_times.get(user_id, [])
@@ -34,7 +78,6 @@ class ReminderCallbackHandler(IMessageHandler):
         user_times.append(now)
         self.user_request_times[user_id] = user_times
         return True
-
     async def handle_rate_limit(self, callback):
         try:
             user_id = callback.from_user.id
@@ -44,10 +87,8 @@ class ReminderCallbackHandler(IMessageHandler):
             await callback.answer(rate_limit_msg, show_alert=True)
         except Exception as e:
             logger.error(f"Error in handle_rate_limit: {e}")
-
     async def handle_message(self, message) -> None:
         pass
-
     async def handle_callback(self, callback: CallbackQuery) -> None:
         user_id = callback.from_user.id
         if not self.rate_limit_check(user_id):
@@ -61,7 +102,6 @@ class ReminderCallbackHandler(IMessageHandler):
             await callback.answer()
             return
         await callback.answer()
-
     async def handle_setup_language_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -84,7 +124,6 @@ class ReminderCallbackHandler(IMessageHandler):
             await callback_query.answer()
             return
         await callback_query.answer()
-
     async def handle_language_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -112,7 +151,6 @@ class ReminderCallbackHandler(IMessageHandler):
             [KeyboardButton(text=self.t(lang_code, "btn_remove_menu"))]
         ], resize_keyboard=True)
         await callback_query.message.answer(self.t(lang_code, "menu"), reply_markup=kb)
-
     async def handle_change_language(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -131,7 +169,6 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_change_language for user {user_id}: {e}")
             await callback_query.answer()
-
     async def handle_change_timezone(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -145,7 +182,6 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_change_timezone for user {user_id}: {e}")
             await callback_query.answer()
-
     async def handle_timezone_confirmation(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -175,7 +211,6 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_timezone_confirmation for user {user_id}: {e}")
             await callback_query.answer()
-
     async def handle_timezone_cancel(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         try:
@@ -185,7 +220,6 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_timezone_cancel for user {user_id}: {e}")
             await callback_query.answer()
-
     async def handle_reminder_actions(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -212,7 +246,6 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error updating reminder {reminder_id} for user {user_id}: {e}")
             await callback_query.answer()
-
     async def handle_delete_confirmation(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -234,7 +267,6 @@ class ReminderCallbackHandler(IMessageHandler):
         self.db.update_status(reminder_id, "cancelled")
         await callback_query.message.edit_text(self.t(lang, "reminder_deleted").format(id=reminder_id))
         await callback_query.answer(self.t(lang, "delete_confirmed"))
-
     async def handle_edit_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -258,7 +290,6 @@ class ReminderCallbackHandler(IMessageHandler):
             self.t(lang, "reminder_selected").format(id=reminder_id)
         )
         await callback_query.answer()
-
     async def handle_confirm_cancel(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -273,14 +304,10 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         if callback_query.data == "confirm" and user_id in self.session.pending:
             pending_data = self.session.pending.pop(user_id)
-            
-            # Handle edit confirmation
             if pending_data.get("type") == "edit":
                 reminder_id = pending_data["reminder_id"]
                 edit_result = pending_data["edited"]
                 original = pending_data["original"]
-                
-                # Update the reminder in database
                 self.db.update_reminder(
                     reminder_id,
                     edit_result.get("category", original["category"]),
@@ -289,19 +316,13 @@ class ReminderCallbackHandler(IMessageHandler):
                     edit_result.get("timezone", original["timezone"]),
                     edit_result.get("repeat", original["repeat"])
                 )
-                
-                # Clear editing state
                 self.session.editing_reminders.pop(user_id, None)
-                
-                # Show success message
                 repeat_value = edit_result.get("repeat", original["repeat"])
                 if isinstance(repeat_value, dict):
                     import json
                     repeat_value = json.dumps(repeat_value)
                 repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-                
-                # Restore classic menu
                 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
                 kb = ReplyKeyboardMarkup(keyboard=[
                     [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
@@ -310,7 +331,6 @@ class ReminderCallbackHandler(IMessageHandler):
                     [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))],
                     [KeyboardButton(text=self.message_handler.t(lang, "btn_remove_menu"))]
                 ], resize_keyboard=True)
-                
                 calendar_type = data["settings"].get("calendar", "miladi")
                 display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
                 await callback_query.message.delete()
@@ -325,6 +345,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 )
             elif "reminders" in pending_data and isinstance(pending_data["reminders"], list):
                 created_count = 0
+                calendar_type = data["settings"].get("calendar", "miladi")
                 for reminder in pending_data["reminders"]:
                     reminder_data = {
                         "category": reminder.get("category", self.config.default_category),
@@ -333,6 +354,8 @@ class ReminderCallbackHandler(IMessageHandler):
                         "timezone": reminder.get("timezone", self.config.default_timezone),
                         "repeat": reminder.get("repeat", self.config.default_repeat)
                     }
+                    corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
+                    reminder_data["time"] = corrected_time
                     self.db.add(
                         user_id,
                         reminder_data["category"],
@@ -346,6 +369,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "multiple_reminders_saved").format(count=created_count))
             else:
+                calendar_type = data["settings"].get("calendar", "miladi")
                 reminder_data = {
                     "category": pending_data.get("category", self.config.default_category),
                     "content": pending_data.get("content", "")[:self.config.max_reminder_length],
@@ -353,6 +377,8 @@ class ReminderCallbackHandler(IMessageHandler):
                     "timezone": pending_data.get("timezone", self.config.default_timezone),
                     "repeat": pending_data.get("repeat", self.config.default_repeat)
                 }
+                corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
+                reminder_data["time"] = corrected_time
                 self.db.add(
                     user_id,
                     reminder_data["category"],
@@ -367,15 +393,12 @@ class ReminderCallbackHandler(IMessageHandler):
         else:
             if user_id in self.session.pending:
                 pending_data = self.session.pending.pop(user_id)
-                # If canceling edit, keep editing state and show cancel option
                 if pending_data.get("type") == "edit":
                     await callback_query.message.edit_reply_markup(reply_markup=None)
-                    
                     from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
                     cancel_kb = ReplyKeyboardMarkup(keyboard=[
                         [KeyboardButton(text=self.t(lang, "exit_edit"))]
                     ], resize_keyboard=True)
-                    
                     await callback_query.message.answer(
                         self.t(lang, "ask_more"), 
                         reply_markup=cancel_kb
@@ -387,7 +410,6 @@ class ReminderCallbackHandler(IMessageHandler):
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "ask_more"))
         await callback_query.answer()
-
     async def handle_exit_edit(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         try:
