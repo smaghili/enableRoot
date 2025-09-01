@@ -94,6 +94,8 @@ async def start_message(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
+
+    
     data = storage.load(user_id)
     is_new_user = not data["settings"].get("setup_complete", False)
     
@@ -114,13 +116,7 @@ async def start_message(message: Message):
             ])
             await message.answer(
                 "🎉 Welcome to Smart Reminder Bot!\n"
-                "🌍 Please choose your language:\n\n"
-                "به ربات یادآوری هوشمند خوش آمدید!\n"
-                "لطفاً زبان خود را انتخاب کنید:\n\n"
-                "مرحباً بك في بوت التذكير الذكي!\n"
-                "يرجى اختيار لغتك:\n\n"
-                "Добро пожаловать в умного бота-напоминалку!\n"
-                "Пожалуйста, выберите ваш язык:",
+                "🌍 Please choose your language:",
                 reply_markup=kb
             )
         else:
@@ -338,7 +334,8 @@ async def handle_menu_buttons(message: Message):
             user_id in admin_handler.waiting_for_private_user_id or
             user_id in admin_handler.waiting_for_private_message or 
             user_id in admin_handler.waiting_for_channel or
-            user_id in admin_handler.waiting_for_limit):
+            user_id in admin_handler.waiting_for_limit or
+            user_id in admin_handler.waiting_for_delete_user):
             await admin_handler.handle_admin_message(message)
             return
         
@@ -405,6 +402,10 @@ async def handle_change_calendar(callback_query: CallbackQuery):
 async def handle_calendar_selection(callback_query: CallbackQuery):
     await callback_handler.handle_calendar_selection(callback_query)
 
+@dp.callback_query(F.data.startswith("setup_calendar_"))
+async def handle_setup_calendar_selection(callback_query: CallbackQuery):
+    await callback_handler.handle_setup_calendar_selection(callback_query)
+
 @dp.callback_query(F.data.startswith(("stop_", "paid_", "taken_")))
 async def handle_reminder_actions(callback_query: CallbackQuery):
     await callback_handler.handle_reminder_actions(callback_query)
@@ -430,6 +431,8 @@ async def handle_admin_removal_callbacks(callback_query: CallbackQuery):
 @dp.callback_query(F.data.startswith(("forced_join_", "delete_channel_", "confirm_delete_channel_", "cancel_delete_channel", "back_to_forced_join")))
 async def handle_forced_join_callbacks(callback_query: CallbackQuery):
     await admin_handler.handle_forced_join_callback(callback_query)
+
+
 
 @dp.callback_query(F.data == "check_membership")
 async def handle_check_membership(callback_query: CallbackQuery):

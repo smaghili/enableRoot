@@ -142,13 +142,11 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         await callback_query.message.edit_text(self.t(lang_code, "saved"))
         await callback_query.answer()
-        await callback_query.message.answer(self.t(lang_code, "start"))
         kb = ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text=self.t(lang_code, "btn_list"))],
-            [KeyboardButton(text=self.t(lang_code, "btn_delete")), KeyboardButton(text=self.t(lang_code, "btn_edit"))],
             [KeyboardButton(text=self.t(lang_code, "btn_new"))],
-            [KeyboardButton(text=self.t(lang_code, "btn_settings")), KeyboardButton(text=self.t(lang_code, "btn_stats"))],
-            [KeyboardButton(text=self.t(lang_code, "btn_remove_menu"))]
+            [KeyboardButton(text=self.t(lang_code, "btn_delete")), KeyboardButton(text=self.t(lang_code, "btn_edit"))],
+            [KeyboardButton(text=self.t(lang_code, "btn_list"))],
+            [KeyboardButton(text=self.t(lang_code, "btn_settings")), KeyboardButton(text=self.t(lang_code, "btn_stats"))]
         ], resize_keyboard=True)
         await callback_query.message.answer(self.t(lang_code, "menu"), reply_markup=kb)
     async def handle_change_language(self, callback_query: CallbackQuery):
@@ -194,16 +192,16 @@ class ReminderCallbackHandler(IMessageHandler):
             self.storage.update_setting(user_id, "timezone", timezone)
             is_setup = not data["settings"].get("setup_complete", False)
             if is_setup:
-                self.storage.update_setting(user_id, "setup_complete", True)
-                await callback_query.message.edit_text(self.t(lang, "setup_complete"))
-                kb = ReplyKeyboardMarkup(keyboard=[
-                    [KeyboardButton(text=self.t(lang, "btn_list"))],
-                    [KeyboardButton(text=self.t(lang, "btn_delete")), KeyboardButton(text=self.t(lang, "btn_edit"))],
-                    [KeyboardButton(text=self.t(lang, "btn_new"))],
-                    [KeyboardButton(text=self.t(lang, "btn_settings")), KeyboardButton(text=self.t(lang, "btn_stats"))],
-                    [KeyboardButton(text=self.t(lang, "btn_remove_menu"))]
-                ], resize_keyboard=True)
-                await callback_query.message.answer(self.t(lang, "menu"), reply_markup=kb)
+                kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text=self.t(lang, "calendar_shamsi"), callback_data="setup_calendar_shamsi")],
+                    [InlineKeyboardButton(text=self.t(lang, "calendar_miladi"), callback_data="setup_calendar_miladi")],
+                    [InlineKeyboardButton(text=self.t(lang, "calendar_qamari"), callback_data="setup_calendar_qamari")]
+                ])
+                await callback_query.message.edit_text(
+                    f"✅ {self.t(lang, 'timezone_changed').format(timezone=timezone)}\n\n"
+                    f"{self.t(lang, 'choose_calendar')}",
+                    reply_markup=kb
+                )
             else:
                 success_text = self.t(lang, "timezone_changed").format(timezone=timezone)
                 await callback_query.message.edit_text(success_text)
@@ -349,11 +347,10 @@ class ReminderCallbackHandler(IMessageHandler):
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
                 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
                 kb = ReplyKeyboardMarkup(keyboard=[
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_delete")), KeyboardButton(text=self.message_handler.t(lang, "btn_edit"))],
                     [KeyboardButton(text=self.message_handler.t(lang, "btn_new"))],
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))],
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_remove_menu"))]
+                    [KeyboardButton(text=self.message_handler.t(lang, "btn_delete")), KeyboardButton(text=self.message_handler.t(lang, "btn_edit"))],
+                    [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
+                    [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))]
                 ], resize_keyboard=True)
                 calendar_type = data["settings"].get("calendar", "miladi")
                 display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
@@ -444,11 +441,10 @@ class ReminderCallbackHandler(IMessageHandler):
                 self.session.pending.pop(user_id)
             from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
             kb = ReplyKeyboardMarkup(keyboard=[
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_delete")), KeyboardButton(text=self.message_handler.t(lang, "btn_edit"))],
                 [KeyboardButton(text=self.message_handler.t(lang, "btn_new"))],
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))],
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_remove_menu"))]
+                [KeyboardButton(text=self.message_handler.t(lang, "btn_delete")), KeyboardButton(text=self.message_handler.t(lang, "btn_edit"))],
+                [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
+                [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))]
             ], resize_keyboard=True)
             await callback_query.message.answer(self.t(lang, "edit_cancelled"), reply_markup=kb)
         except Exception as e:
@@ -493,4 +489,47 @@ class ReminderCallbackHandler(IMessageHandler):
             await callback_query.answer()
         except Exception as e:
             logger.error(f"Error in handle_calendar_selection for user {user_id}: {e}")
+            await callback_query.answer()
+
+    async def handle_setup_calendar_selection(self, callback_query: CallbackQuery):
+        """Handle calendar selection during initial setup"""
+        user_id = callback_query.from_user.id
+        if not self.rate_limit_check(user_id):
+            await self.handle_rate_limit(callback_query)
+            return
+        try:
+            calendar_type = callback_query.data.replace("setup_calendar_", "")
+            data = self.storage.load(user_id)
+            lang = data["settings"]["language"]
+            
+            # Set the calendar type
+            self.storage.update_setting(user_id, "calendar", calendar_type)
+            
+            # Mark setup as complete
+            self.storage.update_setting(user_id, "setup_complete", True)
+            
+            calendar_names = {
+                "shamsi": self.t(lang, "calendar_shamsi"),
+                "miladi": self.t(lang, "calendar_miladi"),
+                "qamari": self.t(lang, "calendar_qamari")
+            }
+            calendar_display_name = calendar_names.get(calendar_type, calendar_type)
+            
+            # Complete setup and show main menu
+            await callback_query.message.edit_text(
+                f"✅ {self.t(lang, 'calendar_changed').format(calendar=calendar_display_name)}\n\n"
+                f"🎉 {self.t(lang, 'setup_complete')}"
+            )
+            
+            # Show main menu
+            kb = ReplyKeyboardMarkup(keyboard=[
+                [KeyboardButton(text=self.t(lang, "btn_new"))],
+                [KeyboardButton(text=self.t(lang, "btn_delete")), KeyboardButton(text=self.t(lang, "btn_edit"))],
+                [KeyboardButton(text=self.t(lang, "btn_list"))],
+                [KeyboardButton(text=self.t(lang, "btn_settings")), KeyboardButton(text=self.t(lang, "btn_stats"))]
+            ], resize_keyboard=True)
+            await callback_query.message.answer(self.t(lang, "menu"), reply_markup=kb)
+            await callback_query.answer()
+        except Exception as e:
+            logger.error(f"Error in handle_setup_calendar_selection for user {user_id}: {e}")
             await callback_query.answer()

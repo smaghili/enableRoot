@@ -16,7 +16,6 @@
   "btn_new": "➕ New Reminder",
   "btn_settings": "⚙️ Settings",
   "btn_stats": "📊 Statistics",
-  "btn_remove_menu": "❌ Remove Menu",
   "choose_language": "🌍 Choose your language:",
   "delete_which": "🗑 Which reminder do you want to delete?",
   "edit_which": "✏️ Which reminder do you want to edit?",
@@ -51,7 +50,6 @@
   "timezone": "🕐 Timezone",
   "settings": "⚙️ Settings:",
   "stats": "📊 Your Statistics:\n🟢 Active: {active}\n✅ Completed: {completed}",
-  "menu_removed": "Menu removed",
   "ai_error": "❌ Sorry, I couldn't understand your text. Please be more specific.",
   "birthday_week_before": "📅 1 week until {content}",
   "birthday_three_days_before": "📅 3 days until {content}",
@@ -134,11 +132,13 @@
   "admin_limit_updated": "✅ Limit changed to {limit}",
   "admin_limit_removed": "✅ Limit removed (no limit)",
   "admin_invalid_limit": "❌ Please enter a valid number",
-  "yes": "Yes ✅",
-  "no": "No ❌",
   "cancel_operation": "🚫 Cancel Operation",
   "admin_channels_delete_instruction": "🗑️ Click on a channel to delete it:",
   "admin_delete_channel_confirm": "❓ Are you sure you want to delete channel {channel}?",
   "admin_channel_deleted": "✅ Channel {channel} deleted",
-  "not_member_yet": "❌ You haven't joined the required channels yet. Please join first."
+  "not_member_yet": "❌ You haven't joined the required channels yet. Please join first.",
+  "admin_delete_user": "🗑️ Delete User",
+  "enter_user_id_delete": "🔢 Enter user ID or username (@username) to delete:",
+  "user_deleted_success": "✅ User {user_id} and all reminders deleted",
+  "user_not_found": "❌ User not found"
 }

@@ -109,9 +109,13 @@ class ReminderMessageHandler(IMessageHandler):
                 else:
                     await self.handle_edit_input(message)
                     return
+            
+            if not data["settings"].get("setup_complete", False):
+                return
+            
             user_reminders = self.db.list(user_id)
-            if len(user_reminders) >= self.config.max_reminders_per_user:
-                await message.answer(self.t(lang, "max_reminders_reached"))
+            if self.config.max_reminders_per_user > 0 and len(user_reminders) >= self.config.max_reminders_per_user:
+                await message.answer(self.t(lang, "max_reminders_reached").format(max=self.config.max_reminders_per_user))
                 return
             logger.info(f"Parsing text for user {user_id}: {message.text}")
             user_calendar = data["settings"].get("calendar", "miladi")

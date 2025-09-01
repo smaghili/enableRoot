@@ -19,7 +19,7 @@ class JSONStorage:
             default_data = {
                 "user_id": user_id,
                 "reminders": {"active": [], "completed": [], "cancelled": []},
-                "settings": {"language": "fa", "timezone": "+03:30", "setup_complete": False}
+                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "setup_complete": False}
             }
             
             if os.path.exists(p):

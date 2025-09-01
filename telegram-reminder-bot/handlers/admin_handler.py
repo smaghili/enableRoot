@@ -1,6 +1,7 @@
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import logging
 import json
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ class AdminHandler:
         self.waiting_for_channel = set()
         self.waiting_for_limit = set()
         self.in_forced_join_menu = set()
+        self.waiting_for_delete_user = set()
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -42,7 +44,7 @@ class AdminHandler:
             
             keyboard = [
                 [KeyboardButton(text=self.t(lang, "admin_add_admin")), KeyboardButton(text=self.t(lang, "admin_remove_admin"))],
-                [KeyboardButton(text=self.t(lang, "admin_general_stats"))],
+                [KeyboardButton(text=self.t(lang, "admin_general_stats")), KeyboardButton(text=self.t(lang, "admin_delete_user"))],
                 [KeyboardButton(text=self.t(lang, "admin_broadcast")), KeyboardButton(text=self.t(lang, "admin_private_message"))],
                 [KeyboardButton(text=self.t(lang, "admin_user_limit")), KeyboardButton(text=self.t(lang, "admin_forced_join"))],
                 [KeyboardButton(text=self.t(lang, "back"))]
@@ -79,6 +81,8 @@ class AdminHandler:
                 await self.handle_private_message_start(message, lang)
             elif button_text == self.t(lang, "admin_forced_join"):
                 await self.handle_forced_join_menu(message, lang)
+            elif button_text == self.t(lang, "admin_delete_user"):
+                await self.handle_delete_user_start(message, lang)
             elif button_text == self.t(lang, "cancel_operation"):
                 await self.handle_cancel_operation(message, lang)
             elif button_text == self.t(lang, "back"):
@@ -183,6 +187,7 @@ class AdminHandler:
         self.waiting_for_private_user_id.discard(user_id)
         if user_id in self.waiting_for_private_message:
             del self.waiting_for_private_message[user_id]
+        self.waiting_for_delete_user.discard(user_id)
         self.in_forced_join_menu.discard(user_id)
         
         await self.show_admin_panel(message)
@@ -253,6 +258,8 @@ class AdminHandler:
                 await self.process_add_channel(message, lang)
             elif user_id in self.waiting_for_limit:
                 await self.process_limit_change(message, lang)
+            elif user_id in self.waiting_for_delete_user:
+                await self.process_delete_user(message, lang)
                 
         except Exception as e:
             logger.error(f"Error in handle_admin_message: {e}")
@@ -260,7 +267,8 @@ class AdminHandler:
     def is_admin_button(self, message_text: str, lang: str) -> bool:
         admin_buttons = [
             "admin_add_admin", "admin_remove_admin", "admin_general_stats", "admin_user_limit",
-            "admin_broadcast", "admin_private_message", "admin_forced_join", "back", "cancel_operation"
+            "admin_broadcast", "admin_private_message", "admin_forced_join", "admin_delete_user",
+            "back", "cancel_operation"
         ]
         return any(message_text == self.t(lang, btn) for btn in admin_buttons)
 
@@ -707,3 +715,72 @@ class AdminHandler:
         except Exception as e:
             logger.error(f"Error removing admin from config: {e}")
             await callback.message.edit_text(self.t(lang, "admin_error"))
+
+
+
+    async def handle_delete_user_start(self, message: Message, lang: str):
+        self.waiting_for_delete_user.add(message.from_user.id)
+        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        await message.answer(self.t(lang, "enter_user_id_delete"), reply_markup=kb)
+
+    async def process_delete_user(self, message: Message, lang: str):
+        user_id = message.from_user.id
+        try:
+            target_input = message.text.strip()
+            
+            if target_input.startswith("@"):
+                target_user_display = target_input
+                target_user_id = None
+                user_found = False
+                users_path = self.storage.path
+                for filename in os.listdir(users_path):
+                    if filename.endswith('.json'):
+                        try:
+                            file_user_id = int(filename.replace('.json', ''))
+                            user_file = os.path.join(users_path, filename)
+                            if os.path.exists(user_file):
+                                os.remove(user_file)
+                                user_found = True
+                        except:
+                            continue
+                
+                if user_found:
+                    await message.answer(self.t(lang, "user_deleted_success").format(user_id=target_user_display))
+                else:
+                    await message.answer(self.t(lang, "user_not_found"))
+            else:
+                try:
+                    target_user_id = int(target_input)
+                    target_user_display = str(target_user_id)
+                    
+                    if target_user_id in self.config.admin_ids:
+                        await message.answer(self.t(lang, "admin_error"))
+                        return
+                    
+                    user_file = self.storage.file(target_user_id)
+                    if os.path.exists(user_file):
+                        os.remove(user_file)
+                        
+                        try:
+                            user_reminders = self.db.list(target_user_id)
+                            for reminder_id, _, _, _, _, _, _ in user_reminders:
+                                self.db.update_status(reminder_id, "cancelled")
+                        except Exception as db_error:
+                            logger.error(f"Error deleting user reminders from DB: {db_error}")
+                        
+                        await message.answer(self.t(lang, "user_deleted_success").format(user_id=target_user_display))
+                    else:
+                        await message.answer(self.t(lang, "user_not_found"))
+                        
+                except ValueError:
+                    await message.answer(self.t(lang, "admin_invalid_id"))
+                    return
+                
+        except Exception as e:
+            logger.error(f"Error deleting user: {e}")
+            await message.answer(self.t(lang, "admin_error"))
+        finally:
+            self.waiting_for_delete_user.discard(user_id)
+            await self.show_admin_panel(message)
+
