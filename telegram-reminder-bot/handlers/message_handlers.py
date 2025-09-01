@@ -186,10 +186,7 @@ class ReminderMessageHandler(IMessageHandler):
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
-    
-            reminder_id = self.session.editing_reminders[user_id]
-            
-            # Get current reminder details
+            reminder_id = self.session.editing_reminders[user_id] 
             user_reminders = self.db.list(user_id)
             current_reminder = None
             for rid, cat, content, time, tz, repeat, status in user_reminders:
@@ -208,8 +205,6 @@ class ReminderMessageHandler(IMessageHandler):
                 await message.answer(self.t(lang, "reminder_not_found"))
                 self.session.editing_reminders.pop(user_id, None)
                 return
-            
-            # Use AI to parse the edit
             edit_result = await self.ai.parse_edit(current_reminder, message.text, data["settings"]["timezone"])
             if not edit_result:
                 await message.answer(self.t(lang, "parse_error"))

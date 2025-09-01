@@ -40,7 +40,7 @@ create_secure_directory(config.users_path)
 
 bot = Bot(token=config.bot_token)
 dp = Dispatcher()
-db = Database(config.database_path)
+db = Database(config.database_url)
 storage = JSONStorage(config.users_path)
 ai = AIHandler(config.openrouter_key)
 scheduler = ReminderScheduler(db, storage, bot)
@@ -94,17 +94,17 @@ async def start_message(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
-    if config.forced_join.get("enabled", False):
+    data = storage.load(user_id)
+    is_new_user = not data["settings"].get("setup_complete", False)
+    
+    if config.forced_join.get("enabled", False) and not is_new_user:
         if not await admin_handler.check_user_membership(user_id):
-            data = storage.load(user_id)
             lang = data["settings"]["language"]
             kb = await admin_handler.get_join_keyboard(lang)
             await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
             return
     
     try:
-        data = storage.load(user_id)
-        is_new_user = not data["settings"].get("setup_complete", False)
         if is_new_user:
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="🇮🇷 فارسی", callback_data="setup_lang_fa")],
@@ -453,13 +453,19 @@ async def handle_check_membership(callback_query: CallbackQuery):
         
         kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
         await callback_query.message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
+        await callback_query.answer()
     else:
         data = storage.load(user_id)
         lang = data["settings"]["language"]
-        kb = await admin_handler.get_join_keyboard(lang)
-        await callback_query.message.edit_reply_markup(reply_markup=kb)
-    
-    await callback_query.answer()
+        await callback_query.answer(message_handler.t(lang, "not_member_yet"), show_alert=True)
+        try:
+            kb = await admin_handler.get_join_keyboard(lang)
+            await callback_query.message.edit_reply_markup(reply_markup=kb)
+        except Exception as e:
+            if "message is not modified" not in str(e):
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error updating keyboard: {e}")
 
 async def cleanup_memory():
     while True:

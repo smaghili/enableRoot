@@ -139,5 +139,6 @@
   "cancel_operation": "🚫 Cancel Operation",
   "admin_channels_delete_instruction": "🗑️ Click on a channel to delete it:",
   "admin_delete_channel_confirm": "❓ Are you sure you want to delete channel {channel}?",
-  "admin_channel_deleted": "✅ Channel {channel} deleted"
+  "admin_channel_deleted": "✅ Channel {channel} deleted",
+  "not_member_yet": "❌ You haven't joined the required channels yet. Please join first."
 }

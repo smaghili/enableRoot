@@ -8,6 +8,7 @@ class Config:
         self.bot_token: str = self.config_data.get("bot", {}).get("token", "")
         self.openrouter_key: str = self.config_data.get("ai", {}).get("openrouter_key", "")
         self.database_path: str = self.config_data.get("database", {}).get("path", "data/reminders.db")
+        self.database_url: str = self.config_data.get("database", {}).get("url", f"sqlite:///{self.database_path}")
         self.users_path: str = self.config_data.get("storage", {}).get("users_path", "data/users")
         self.max_requests_per_minute: int = self.config_data.get("bot", {}).get("max_requests_per_minute", 20)
         self.rate_limit_window: int = self.config_data.get("bot", {}).get("rate_limit_window", 60)
@@ -44,7 +45,7 @@ class Config:
         self.forced_join: dict = self.config_data.get("bot", {}).get("forced_join", {"enabled": False, "channels": []})
         
     def _load_config(self) -> dict:
-        config_file = "config.json"
+        config_file = "config/config.json"
         if os.path.exists(config_file):
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:

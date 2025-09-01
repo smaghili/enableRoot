@@ -437,9 +437,12 @@ class AdminHandler:
         for channel in channels:
             try:
                 member = await self.bot.get_chat_member(channel, user_id)
-                if member.status in ["left", "kicked"]:
+                valid_statuses = ["member", "administrator", "creator"]
+                if member.status not in valid_statuses:
                     return False
-            except Exception:
+            except Exception as e:
+                if "member list is inaccessible" in str(e):
+                    continue
                 return False
         
         return True

@@ -1,6 +1,7 @@
 {
   "database": {
     "path": "data/reminders.db",
+    "url": "sqlite:///data/reminders.db",
     "timeout": 30.0,
     "journal_mode": "WAL",
     "synchronous": "NORMAL",
