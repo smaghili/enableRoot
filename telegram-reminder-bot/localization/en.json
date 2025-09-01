@@ -98,7 +98,7 @@
   "admin_enter_user_id": "🔢 Enter new admin's numeric ID:",
   "admin_added_success": "✅ Admin with ID {admin_id} added",
   "admin_already_exists": "⚠️ This ID is already an admin",
-  "admin_invalid_id": "❌ Invalid ID",
+  "admin_invalid_id": "❌ Please enter a valid numeric ID",
   "admin_error": "❌ System error",
   "admin_stats_report": "📊 General Report:\n\n👥 Total users: {total_users}\n📝 Total reminders: {total_reminders}\n🟢 Active reminders: {active_reminders}\n🏆 Top category: {top_category} ({top_category_count} reminders)\n👤 User with most reminders: {top_user_id} ({top_user_count} reminders)",
   "admin_current_limit": "⚖️ Current limit per user: {limit} reminders\n\n💡 Zero means no limit\n\n📝 Enter new number:",
@@ -132,5 +132,9 @@
   "admin_limit_removed": "✅ Limit removed (no limit)",
   "admin_invalid_limit": "❌ Please enter a valid number",
   "yes": "Yes ✅",
-  "no": "No ❌"
+  "no": "No ❌",
+  "cancel_operation": "🚫 Cancel Operation",
+  "admin_channels_delete_instruction": "🗑️ Click on a channel to delete it:",
+  "admin_delete_channel_confirm": "❓ Are you sure you want to delete channel {channel}?",
+  "admin_channel_deleted": "✅ Channel {channel} deleted"
 }

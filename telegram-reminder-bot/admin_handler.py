@@ -14,8 +14,10 @@ class AdminHandler:
         self.waiting_for_admin_id = set()
         self.waiting_for_broadcast = set()
         self.waiting_for_private_message = {}
+        self.waiting_for_private_user_id = set()
         self.waiting_for_channel = set()
         self.waiting_for_limit = set()
+        self.in_forced_join_menu = set()
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -47,6 +49,7 @@ class AdminHandler:
             ]
             
             kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+            self.in_forced_join_menu.discard(user_id)
             await message.answer(self.t(lang, "admin_panel"), reply_markup=kb)
         except Exception as e:
             logger.error(f"Error in show_admin_panel: {e}")
@@ -76,6 +79,8 @@ class AdminHandler:
                 await self.handle_private_message_start(message, lang)
             elif button_text == self.t(lang, "admin_forced_join"):
                 await self.handle_forced_join_menu(message, lang)
+            elif button_text == self.t(lang, "cancel_operation"):
+                await self.handle_cancel_operation(message, lang)
             elif button_text == self.t(lang, "back"):
                 await self.handle_back_to_main(message, lang)
                 
@@ -127,46 +132,60 @@ class AdminHandler:
 
     async def handle_broadcast_start(self, message: Message, lang: str):
         self.waiting_for_broadcast.add(message.from_user.id)
-        await message.answer(self.t(lang, "admin_enter_broadcast"))
+        
+        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        
+        await message.answer(self.t(lang, "admin_enter_broadcast"), reply_markup=kb)
 
     async def handle_private_message_start(self, message: Message, lang: str):
-        await message.answer(self.t(lang, "admin_enter_user_id_private"))
+        self.waiting_for_private_user_id.add(message.from_user.id)
+        
+        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        
+        await message.answer(self.t(lang, "admin_enter_user_id_private"), reply_markup=kb)
 
     async def handle_forced_join_menu(self, message: Message, lang: str):
-        status = "enabled" if self.config.forced_join["enabled"] else "disabled"
+        await self.show_forced_join_inline_menu(message, lang)
+
+    async def show_forced_join_inline_menu(self, message: Message, lang: str):
+        current_status = self.get_forced_join_status_from_config()
+        status_icon = "✅" if current_status else "❌"
+        status_text = self.t(lang, "status_enabled") if current_status else self.t(lang, "status_disabled")
         
         keyboard = [
-            [KeyboardButton(text=self.t(lang, "admin_forced_join_toggle"))],
-            [KeyboardButton(text=self.t(lang, "admin_forced_join_add"))],
-            [KeyboardButton(text=self.t(lang, "admin_forced_join_list"))],
-            [KeyboardButton(text=self.t(lang, "back"))]
+            [InlineKeyboardButton(
+                text=f"{status_icon} {self.t(lang, 'admin_forced_join_toggle')}",
+                callback_data="forced_join_toggle"
+            )],
+            [InlineKeyboardButton(
+                text=f"➕ {self.t(lang, 'admin_forced_join_add')}",
+                callback_data="forced_join_add"
+            )],
+            [InlineKeyboardButton(
+                text=f"📋 {self.t(lang, 'admin_forced_join_list')}",
+                callback_data="forced_join_list"
+            )]
         ]
         
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-        text = self.t(lang, "admin_forced_join_status").format(status=self.t(lang, f"status_{status}"))
+        kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
+        text = self.t(lang, "admin_forced_join_status").format(status=status_text)
+        self.in_forced_join_menu.add(message.from_user.id)
         await message.answer(text, reply_markup=kb)
 
-    async def handle_forced_join_button(self, message: Message):
+    async def handle_cancel_operation(self, message: Message, lang: str):
         user_id = message.from_user.id
-        if not self.is_admin(user_id):
-            return
         
-        try:
-            data = self.storage.load(user_id)
-            lang = data["settings"]["language"]
-            button_text = message.text
-            
-            if button_text == self.t(lang, "admin_forced_join_toggle"):
-                await self.handle_forced_join_toggle(message, lang)
-            elif button_text == self.t(lang, "admin_forced_join_add"):
-                await self.handle_forced_join_add(message, lang)
-            elif button_text == self.t(lang, "admin_forced_join_list"):
-                await self.handle_forced_join_list(message, lang)
-            elif button_text == self.t(lang, "back"):
-                await self.show_admin_panel(message)
-                
-        except Exception as e:
-            logger.error(f"Error in handle_forced_join_button: {e}")
+        # Clear all possible waiting states
+        self.waiting_for_broadcast.discard(user_id)
+        self.waiting_for_channel.discard(user_id)
+        self.waiting_for_private_user_id.discard(user_id)
+        if user_id in self.waiting_for_private_message:
+            del self.waiting_for_private_message[user_id]
+        self.in_forced_join_menu.discard(user_id)
+        
+        await self.show_admin_panel(message)
 
     async def handle_forced_join_toggle(self, message: Message, lang: str):
         try:
@@ -226,6 +245,8 @@ class AdminHandler:
                 await self.process_add_admin(message, lang)
             elif user_id in self.waiting_for_broadcast:
                 await self.process_broadcast(message, lang)
+            elif user_id in self.waiting_for_private_user_id:
+                await self.process_private_user_id(message, lang)
             elif user_id in self.waiting_for_private_message:
                 await self.process_private_message(message, lang)
             elif user_id in self.waiting_for_channel:
@@ -239,15 +260,9 @@ class AdminHandler:
     def is_admin_button(self, message_text: str, lang: str) -> bool:
         admin_buttons = [
             "admin_add_admin", "admin_remove_admin", "admin_general_stats", "admin_user_limit",
-            "admin_broadcast", "admin_private_message", "admin_forced_join", "back"
+            "admin_broadcast", "admin_private_message", "admin_forced_join", "back", "cancel_operation"
         ]
         return any(message_text == self.t(lang, btn) for btn in admin_buttons)
-
-    def is_forced_join_button(self, message_text: str, lang: str) -> bool:
-        forced_join_buttons = [
-            "admin_forced_join_toggle", "admin_forced_join_add", "admin_forced_join_list", "back"
-        ]
-        return any(message_text == self.t(lang, btn) for btn in forced_join_buttons)
 
     async def process_add_admin(self, message: Message, lang: str):
         user_id = message.from_user.id
@@ -291,39 +306,55 @@ class AdminHandler:
                     pass
             
             await message.answer(self.t(lang, "admin_broadcast_sent").format(count=success_count))
+            await self.show_admin_panel(message)
             
         except Exception as e:
             logger.error(f"Error in broadcast: {e}")
             await message.answer(self.t(lang, "admin_error"))
+            await self.show_admin_panel(message)
         finally:
             self.waiting_for_broadcast.discard(user_id)
 
+    async def process_private_user_id(self, message: Message, lang: str):
+        user_id = message.from_user.id
+        try:
+            target_user_id = int(message.text.strip())
+            self.waiting_for_private_user_id.discard(user_id)
+            self.waiting_for_private_message[user_id] = target_user_id
+            
+            keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
+            kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+            
+            await message.answer(self.t(lang, "admin_enter_private_message"), reply_markup=kb)
+        except ValueError:
+            await message.answer(self.t(lang, "admin_invalid_id"))
+
     async def process_private_message(self, message: Message, lang: str):
         user_id = message.from_user.id
-        if user_id in self.waiting_for_private_message:
-            target_user_id = self.waiting_for_private_message[user_id]
-            try:
-                await self.bot.send_message(target_user_id, message.text)
-                await message.answer(self.t(lang, "admin_private_sent"))
-            except Exception as e:
-                logger.error(f"Error sending private message: {e}")
-                await message.answer(self.t(lang, "admin_error"))
-            finally:
-                del self.waiting_for_private_message[user_id]
-        else:
-            try:
-                target_user_id = int(message.text.strip())
-                self.waiting_for_private_message[user_id] = target_user_id
-                await message.answer(self.t(lang, "admin_enter_private_message"))
-            except ValueError:
-                await message.answer(self.t(lang, "admin_invalid_id"))
+        # User already provided target ID, now sending the message
+        target_user_id = self.waiting_for_private_message[user_id]
+        try:
+            await self.bot.send_message(target_user_id, message.text)
+            await message.answer(self.t(lang, "admin_private_sent"))
+            await self.show_admin_panel(message)
+        except Exception as e:
+            logger.error(f"Error sending private message: {e}")
+            await message.answer(self.t(lang, "admin_error"))
+        finally:
+            del self.waiting_for_private_message[user_id]
 
     async def process_add_channel(self, message: Message, lang: str):
         user_id = message.from_user.id
         try:
-            channel = message.text.strip()
-            if not channel.startswith("@"):
-                channel = "@" + channel
+            channel_input = message.text.strip()
+            if channel_input.startswith("https://t.me/"):
+                channel = "@" + channel_input.replace("https://t.me/", "")
+            elif channel_input.startswith("t.me/"):
+                channel = "@" + channel_input.replace("t.me/", "")
+            elif channel_input.startswith("@"):
+                channel = channel_input
+            else:
+                channel = "@" + channel_input
             
             config_data = {}
             with open("config.json", "r") as f:
@@ -336,6 +367,7 @@ class AdminHandler:
                     json.dump(config_data, f, indent=2)
                 
                 await message.answer(self.t(lang, "admin_channel_added").format(channel=channel))
+                await self.show_admin_panel(message)
             else:
                 await message.answer(self.t(lang, "admin_channel_exists"))
                 
@@ -386,6 +418,14 @@ class AdminHandler:
         except Exception:
             return self.config.max_reminders_per_user
 
+    def get_forced_join_status_from_config(self):
+        try:
+            with open("config.json", "r") as f:
+                config_data = json.load(f)
+            return config_data["bot"]["forced_join"]["enabled"]
+        except Exception:
+            return self.config.forced_join.get("enabled", False)
+
     async def check_user_membership(self, user_id):
         if not self.config.forced_join.get("enabled", False):
             return True
@@ -421,6 +461,191 @@ class AdminHandler:
         )])
         
         return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    async def handle_forced_join_callback(self, callback: CallbackQuery):
+        user_id = callback.from_user.id
+        if not self.is_admin(user_id):
+            await callback.answer()
+            return
+
+        try:
+            data = self.storage.load(user_id)
+            lang = data["settings"]["language"]
+
+            if callback.data == "forced_join_toggle":
+                await self.handle_forced_join_toggle_inline(callback, lang)
+            elif callback.data == "forced_join_add":
+                await self.handle_forced_join_add_inline(callback, lang)
+            elif callback.data == "forced_join_list":
+                await self.handle_forced_join_list_inline(callback, lang)
+            elif callback.data.startswith("delete_channel_"):
+                channel_name = "@" + callback.data.replace("delete_channel_", "")
+                await self.show_delete_channel_confirmation(callback, lang, channel_name)
+            elif callback.data.startswith("confirm_delete_channel_"):
+                channel_name = "@" + callback.data.replace("confirm_delete_channel_", "")
+                await self.delete_channel_confirmed(callback, lang, channel_name)
+            elif callback.data.startswith("cancel_delete_channel"):
+                await self.handle_forced_join_list_inline(callback, lang)
+            elif callback.data == "back_to_forced_join":
+                await self.back_to_forced_join_menu(callback, lang)
+
+        except Exception as e:
+            logger.error(f"Error in handle_forced_join_callback: {e}")
+            await callback.answer()
+
+    async def handle_forced_join_toggle_inline(self, callback: CallbackQuery, lang: str):
+        try:
+            config_data = {}
+            with open("config.json", "r") as f:
+                config_data = json.load(f)
+            
+            current_status = config_data["bot"]["forced_join"]["enabled"]
+            new_status = not current_status
+            config_data["bot"]["forced_join"]["enabled"] = new_status
+            
+            with open("config.json", "w") as f:
+                json.dump(config_data, f, indent=2)
+            
+            self.config.forced_join["enabled"] = new_status
+            
+            await callback.answer(self.t(lang, "admin_forced_join_toggled"))
+            
+            await self.update_forced_join_inline_menu(callback.message, lang)
+            
+        except Exception as e:
+            logger.error(f"Error toggling forced join: {e}")
+            await callback.answer(self.t(lang, "admin_error"))
+
+    async def handle_forced_join_add_inline(self, callback: CallbackQuery, lang: str):
+        user_id = callback.from_user.id
+        self.waiting_for_channel.add(user_id)
+        self.in_forced_join_menu.discard(user_id)
+        
+        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        
+        await callback.message.answer(self.t(lang, "admin_enter_channel"), reply_markup=kb)
+        await callback.answer()
+
+    async def handle_forced_join_list_inline(self, callback: CallbackQuery, lang: str):
+        try:
+            config_data = {}
+            with open("config.json", "r") as f:
+                config_data = json.load(f)
+            
+            channels = config_data["bot"]["forced_join"]["channels"]
+            
+            if channels:
+                text = self.t(lang, "admin_channels_delete_instruction")
+                keyboard = []
+                
+                for channel in channels:
+                    keyboard.append([InlineKeyboardButton(
+                        text=f"🗑️ {channel}",
+                        callback_data=f"delete_channel_{channel[1:]}"  # Remove @ from channel name
+                    )])
+                
+                keyboard.append([InlineKeyboardButton(
+                    text=f"🔙 {self.t(lang, 'back')}",
+                    callback_data="back_to_forced_join"
+                )])
+                
+                kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
+                await callback.message.edit_text(text, reply_markup=kb)
+            else:
+                text = self.t(lang, "admin_no_channels")
+                keyboard = [[InlineKeyboardButton(
+                    text=f"🔙 {self.t(lang, 'back')}",
+                    callback_data="back_to_forced_join"
+                )]]
+                kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
+                await callback.message.edit_text(text, reply_markup=kb)
+            
+            await callback.answer()
+            
+        except Exception as e:
+            logger.error(f"Error showing channel list: {e}")
+            await callback.answer(self.t(lang, "admin_error"))
+
+    async def show_delete_channel_confirmation(self, callback: CallbackQuery, lang: str, channel_name: str):
+        try:
+            text = self.t(lang, "admin_delete_channel_confirm").format(channel=channel_name)
+            
+            keyboard = [
+                [InlineKeyboardButton(
+                    text=self.t(lang, "yes"),
+                    callback_data=f"confirm_delete_channel_{channel_name[1:]}"  # Remove @
+                )],
+                [InlineKeyboardButton(
+                    text=self.t(lang, "no"),
+                    callback_data="cancel_delete_channel"
+                )]
+            ]
+            
+            kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
+            await callback.message.edit_text(text, reply_markup=kb)
+            await callback.answer()
+            
+        except Exception as e:
+            logger.error(f"Error showing delete confirmation: {e}")
+            await callback.answer(self.t(lang, "admin_error"))
+
+    async def delete_channel_confirmed(self, callback: CallbackQuery, lang: str, channel_name: str):
+        try:
+            config_data = {}
+            with open("config.json", "r") as f:
+                config_data = json.load(f)
+            
+            if channel_name in config_data["bot"]["forced_join"]["channels"]:
+                config_data["bot"]["forced_join"]["channels"].remove(channel_name)
+                
+                with open("config.json", "w") as f:
+                    json.dump(config_data, f, indent=2)
+                
+                await callback.answer(self.t(lang, "admin_channel_deleted").format(channel=channel_name))
+                await self.handle_forced_join_list_inline(callback, lang)
+            else:
+                await callback.answer(self.t(lang, "admin_error"))
+                
+        except Exception as e:
+            logger.error(f"Error deleting channel: {e}")
+            await callback.answer(self.t(lang, "admin_error"))
+
+    async def back_to_forced_join_menu(self, callback: CallbackQuery, lang: str):
+        try:
+            await self.update_forced_join_inline_menu(callback.message, lang)
+            await callback.answer()
+        except Exception as e:
+            logger.error(f"Error going back to forced join menu: {e}")
+            await callback.answer(self.t(lang, "admin_error"))
+
+    async def update_forced_join_inline_menu(self, message: Message, lang: str):
+        current_status = self.get_forced_join_status_from_config()
+        status_icon = "✅" if current_status else "❌"
+        status_text = self.t(lang, "status_enabled") if current_status else self.t(lang, "status_disabled")
+        
+        keyboard = [
+            [InlineKeyboardButton(
+                text=f"{status_icon} {self.t(lang, 'admin_forced_join_toggle')}",
+                callback_data="forced_join_toggle"
+            )],
+            [InlineKeyboardButton(
+                text=f"➕ {self.t(lang, 'admin_forced_join_add')}",
+                callback_data="forced_join_add"
+            )],
+            [InlineKeyboardButton(
+                text=f"📋 {self.t(lang, 'admin_forced_join_list')}",
+                callback_data="forced_join_list"
+            )]
+        ]
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
+        text = self.t(lang, "admin_forced_join_status").format(status=status_text)
+        
+        try:
+            await message.edit_text(text, reply_markup=kb)
+        except Exception:
+            await message.answer(text, reply_markup=kb)
 
     async def handle_admin_removal_callback(self, callback: CallbackQuery):
         user_id = callback.from_user.id

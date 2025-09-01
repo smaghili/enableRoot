@@ -326,17 +326,14 @@ async def handle_menu_buttons(message: Message):
         if message.text == message_handler.t(lang, "btn_admin") and admin_handler.is_admin(user_id):
             await admin_handler.show_admin_panel(message)
             return
-        
+            
         if admin_handler.is_admin(user_id) and admin_handler.is_admin_button(message.text, lang):
             await admin_handler.handle_admin_button(message)
-            return
-            
-        if admin_handler.is_admin(user_id) and admin_handler.is_forced_join_button(message.text, lang):
-            await admin_handler.handle_forced_join_button(message)
             return
         
         if (user_id in admin_handler.waiting_for_admin_id or 
             user_id in admin_handler.waiting_for_broadcast or 
+            user_id in admin_handler.waiting_for_private_user_id or
             user_id in admin_handler.waiting_for_private_message or 
             user_id in admin_handler.waiting_for_channel or
             user_id in admin_handler.waiting_for_limit):
@@ -427,6 +424,10 @@ async def handle_exit_edit(callback_query: CallbackQuery):
 @dp.callback_query(F.data.startswith(("remove_admin_", "confirm_remove_", "cancel_remove")))
 async def handle_admin_removal_callbacks(callback_query: CallbackQuery):
     await admin_handler.handle_admin_removal_callback(callback_query)
+
+@dp.callback_query(F.data.startswith(("forced_join_", "delete_channel_", "confirm_delete_channel_", "cancel_delete_channel", "back_to_forced_join")))
+async def handle_forced_join_callbacks(callback_query: CallbackQuery):
+    await admin_handler.handle_forced_join_callback(callback_query)
 
 @dp.callback_query(F.data == "check_membership")
 async def handle_check_membership(callback_query: CallbackQuery):
