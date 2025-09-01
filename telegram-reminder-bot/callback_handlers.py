@@ -5,6 +5,7 @@ import time
 import datetime
 from config import Config
 from interfaces import IMessageHandler
+from date_converter import DateConverter
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +294,11 @@ class ReminderCallbackHandler(IMessageHandler):
                 self.session.editing_reminders.pop(user_id, None)
                 
                 # Show success message
-                repeat_pattern = self.repeat_handler.from_json(edit_result.get("repeat", original["repeat"]))
+                repeat_value = edit_result.get("repeat", original["repeat"])
+                if isinstance(repeat_value, dict):
+                    import json
+                    repeat_value = json.dumps(repeat_value)
+                repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
                 
                 # Restore classic menu
@@ -306,12 +311,14 @@ class ReminderCallbackHandler(IMessageHandler):
                     [KeyboardButton(text=self.message_handler.t(lang, "btn_remove_menu"))]
                 ], resize_keyboard=True)
                 
+                calendar_type = data["settings"].get("calendar", "miladi")
+                display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
                 await callback_query.message.delete()
                 await callback_query.message.answer(
                     self.t(lang, "edit_success_details").format(
                         id=reminder_id,
                         content=edit_result.get("content", original["content"]),
-                        time=edit_result.get("time", original["time"]),
+                        time=display_time,
                         repeat=repeat_text
                     ),
                     reply_markup=kb

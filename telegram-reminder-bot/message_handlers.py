@@ -4,8 +4,10 @@ from typing import Dict, Any
 import logging
 import time
 import datetime
+import json
 from config import Config
 from interfaces import IMessageHandler
+from date_converter import DateConverter
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +95,7 @@ class ReminderMessageHandler(IMessageHandler):
             if self.waiting_for_city.get(user_id, False):
                 await self.handle_city_input(message)
                 return
-            
-            # Check if user is editing a reminder
             if user_id in self.session.editing_reminders:
-                # Check if user wants to exit edit mode
                 if message.text == self.t(lang, "exit_edit"):
                     await self.handle_exit_edit_text(message, lang)
                     return
@@ -108,10 +107,16 @@ class ReminderMessageHandler(IMessageHandler):
                 await message.answer(self.t(lang, "max_reminders_reached"))
                 return
             logger.info(f"Parsing text for user {user_id}: {message.text}")
-            parsed = await self.ai.parse(lang, data["settings"]["timezone"], message.text)
+            user_calendar = data["settings"].get("calendar", "miladi")
+            parsed = await self.ai.parse(lang, data["settings"]["timezone"], message.text, user_calendar)
             if not parsed:
                 await message.answer(self.t(lang, "parse_error"))
                 return
+            if not parsed.get("reminders") or len(parsed["reminders"]) == 0:
+                error_message = self.t(lang, parsed.get("message") or "ai_error")
+                await message.answer(error_message)
+                return
+                
             self.session.pending[user_id] = parsed
             self.session.pending_cleanup_time[user_id] = datetime.datetime.now() + datetime.timedelta(minutes=10)
             await self.handle_parsed_reminder(message, parsed, lang)
@@ -198,7 +203,6 @@ class ReminderMessageHandler(IMessageHandler):
                 await message.answer(self.t(lang, "parse_error"))
                 return
             
-            # Store the edit result for confirmation
             edit_data = {
                 "reminder_id": reminder_id,
                 "original": current_reminder,
@@ -207,9 +211,10 @@ class ReminderMessageHandler(IMessageHandler):
             }
             self.session.pending[user_id] = edit_data
             self.session.pending_cleanup_time[user_id] = datetime.datetime.now() + datetime.timedelta(minutes=10)
-            
-            # Show preview and ask for confirmation
-            repeat_pattern = self.repeat_handler.from_json(edit_result.get("repeat", current_reminder["repeat"]))
+            repeat_value = edit_result.get("repeat", current_reminder["repeat"])
+            if isinstance(repeat_value, dict):
+                repeat_value = json.dumps(repeat_value)
+            repeat_pattern = self.repeat_handler.from_json(repeat_value)
             repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
             
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -218,11 +223,13 @@ class ReminderMessageHandler(IMessageHandler):
                 [InlineKeyboardButton(text=self.t(lang, "cancel"), callback_data="cancel")]
             ])
             
+            calendar_type = data["settings"].get("calendar", "miladi")
+            display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", current_reminder["time"]), calendar_type)
             preview_text = self.t(lang, "edit_preview").format(
                 id=reminder_id,
                 old_content=current_reminder["content"],
                 new_content=edit_result.get("content", current_reminder["content"]),
-                time=edit_result.get("time", current_reminder["time"]),
+                time=display_time,
                 repeat=repeat_text
             )
             
@@ -237,12 +244,9 @@ class ReminderMessageHandler(IMessageHandler):
         """Handle exit edit via text message"""
         user_id = message.from_user.id
         try:
-            # Clear editing state completely
             self.session.editing_reminders.pop(user_id, None)
             if user_id in self.session.pending:
                 self.session.pending.pop(user_id)
-            
-            # Restore classic menu
             from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
             kb = ReplyKeyboardMarkup(keyboard=[
                 [KeyboardButton(text=self.t(lang, "btn_new"))],
@@ -291,23 +295,35 @@ Examples:
             return None
 
     async def handle_parsed_reminder(self, message: Message, parsed: Dict[str, Any], lang: str):
+        user_id = message.from_user.id
+        data = self.storage.load(user_id)
+        calendar_type = data["settings"].get("calendar", "miladi")
         if "reminders" in parsed and isinstance(parsed["reminders"], list):
             summary_lines = [self.t(lang, "multiple_reminders_summary").format(count=len(parsed["reminders"]))]
             for i, reminder in enumerate(parsed["reminders"], 1):
                 category_text = self.t(lang, f"category_{reminder['category']}")
                 if category_text == f"category_{reminder['category']}":
                     category_text = reminder['category']
-                repeat_pattern = self.repeat_handler.from_json(reminder.get('repeat', self.config.default_repeat))
+                repeat_value = reminder.get('repeat', self.config.default_repeat)
+                if isinstance(repeat_value, dict):
+                    repeat_value = json.dumps(repeat_value)
+                repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-                summary_lines.append(f"{i}. {reminder['content']} @ {reminder['time']} ({category_text}) - {repeat_text}")
+                display_time = DateConverter.convert_to_user_calendar(reminder['time'], calendar_type)
+                summary_lines.append(f"{i}. {reminder['content']} @ {display_time} ({category_text}) - {repeat_text}")
             summary = "\n".join(summary_lines)
         else:
             category_text = self.t(lang, f"category_{parsed['category']}")
             if category_text == f"category_{parsed['category']}":
                 category_text = parsed['category']
-            repeat_pattern = self.repeat_handler.from_json(parsed.get('repeat', self.config.default_repeat))
+            repeat_value = parsed.get('repeat', self.config.default_repeat)
+            if isinstance(repeat_value, dict):
+                repeat_value = json.dumps(repeat_value)
+            repeat_pattern = self.repeat_handler.from_json(repeat_value)
             repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-            summary = f"{self.t(lang, 'summary')}: {parsed['content']} @ {parsed['time']} ({category_text}) - {repeat_text}"
+            display_time = DateConverter.convert_to_user_calendar(parsed['time'], calendar_type)
+            summary_prefix = self.t(lang, 'summary')
+            summary = f"{summary_prefix}: {parsed['content']} @ {display_time} ({category_text}) - {repeat_text}"
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=self.t(lang, "confirm"), callback_data="confirm")],
             [InlineKeyboardButton(text=self.t(lang, "cancel"), callback_data="cancel")]

@@ -150,7 +150,7 @@ create_config_file() {
         sed -i "s/YOUR_BOT_TOKEN_HERE/$BOT_TOKEN/g" config.json
         sed -i "s/YOUR_OPENROUTER_API_KEY_HERE/$OPENROUTER_KEY/g" config.json
     fi
-    chmod 600 config.json
+    chmod 644 config.json
     print_status "config.json file created with secure permissions"
 }
 
@@ -159,8 +159,8 @@ create_config_file() {
 create_directories() {
     print_status "Creating data directories..."
     mkdir -p data/users
-    chmod 700 data
-    chmod 700 data/users
+    chmod 755 data
+    chmod 755 data/users
     print_status "Data directories created with secure permissions"
 }
 

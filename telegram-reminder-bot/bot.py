@@ -10,6 +10,7 @@ from repeat_handler import RepeatHandler
 from message_handlers import ReminderMessageHandler
 from callback_handlers import ReminderCallbackHandler
 from config import Config
+from date_converter import DateConverter
 import json
 import os
 import datetime
@@ -131,7 +132,9 @@ async def list_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        data = storage.load(user_id)
+        lang = data["settings"]["language"]
+        calendar_type = data["settings"].get("calendar", "miladi")
         reminders = db.list(user_id)
         if not reminders:
             await message.answer(message_handler.t(lang, "no_reminders"))
@@ -140,7 +143,8 @@ async def list_reminders(message: Message):
             for rid, cat, content, time, tz, repeat, status in reminders:
                 emoji = config.emoji_mapping.get(cat, "⏰")
                 safe_content = message_handler.sanitize_input(str(content))[:50]
-                lines.append(f"{rid}. {emoji} {safe_content} @ {time}")
+                display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
+                lines.append(f"{rid}. {emoji} {safe_content} @ {display_time}")
             await message.answer("\n".join(lines))
     except Exception as e:
         logger.error(f"Error in list_reminders for user {user_id}: {e}")
@@ -151,7 +155,9 @@ async def show_reminders_list(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        data = storage.load(user_id)
+        lang = data["settings"]["language"]
+        calendar_type = data["settings"].get("calendar", "miladi")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_reminders_list for user {user_id}: {e}")
@@ -164,9 +170,10 @@ async def show_reminders_list(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
+        display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
         lines.append(message_handler.t(lang, "reminder_id").format(id=rid))
         lines.append(f"{emoji} {content}")
-        lines.append(message_handler.t(lang, "reminder_time").format(time=time))
+        lines.append(message_handler.t(lang, "reminder_time").format(time=display_time))
         lines.append(message_handler.t(lang, "reminder_repeat").format(repeat=repeat_text))
         lines.append("─" * 25)
     await message.answer("\n".join(lines))
@@ -206,7 +213,9 @@ async def show_delete_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        data = storage.load(user_id)
+        lang = data["settings"]["language"]
+        calendar_type = data["settings"].get("calendar", "miladi")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_delete_reminders for user {user_id}: {e}")
@@ -219,8 +228,9 @@ async def show_delete_reminders(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
+        display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
         display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
-        button_text = f"🗑 {emoji} {display_content}\n📅 {time} | 🔄 {repeat_text}"
+        button_text = f"🗑 {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"delete_confirm_{rid}")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(message_handler.t(lang, "delete_which"), reply_markup=kb)
@@ -231,7 +241,9 @@ async def show_edit_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        data = storage.load(user_id)
+        lang = data["settings"]["language"]
+        calendar_type = data["settings"].get("calendar", "miladi")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_edit_reminders for user {user_id}: {e}")
@@ -244,8 +256,9 @@ async def show_edit_reminders(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
+        display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
         display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
-        button_text = f"✏️ {emoji} {display_content}\n📅 {time} | 🔄 {repeat_text}"
+        button_text = f"✏️ {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"edit_select_{rid}")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(message_handler.t(lang, "edit_which"), reply_markup=kb)

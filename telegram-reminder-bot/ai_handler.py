@@ -5,7 +5,7 @@ import logging
 import re
 import asyncio
 from typing import Dict, Any, Optional
-from repeat_handler import RepeatHandler
+
 
 try:
     import jdatetime
@@ -43,79 +43,11 @@ class AIHandler:
         self.key = key
         self.logger = logging.getLogger(__name__)
         self.session_timeout = aiohttp.ClientTimeout(total=30)
-        self.repeat_handler = RepeatHandler()
+
         
         if not key or not isinstance(key, str):
             raise ValueError("Invalid API key provided")
-
-    def fallback(self, text: str, timezone: str) -> Dict[str, Any]:
-        try:
-            now = datetime.datetime.now()
-            reminder_time = now
-
-            repeat_pattern = self.repeat_handler.parse_from_text(text, now)
-            self.logger.info(f"Fallback - repeat pattern: {repeat_pattern}")
-
-            reminder_time = self._calculate_smart_time(text, now, repeat_pattern)
-            category = self._detect_category(text)
-            safe_text = str(text)[:500] if text else "Reminder"
-
-            result = {
-                "category": category,
-                "content": safe_text,
-                "time": reminder_time.strftime("%Y-%m-%d %H:%M"),
-                "repeat": self.repeat_handler.to_json(repeat_pattern),
-                "timezone": timezone,
-            }
-
-            self.logger.info(f"Fallback result: {result}")
-            return result
-        except Exception as e:
-            self.logger.error(f"Error in fallback parsing: {e}")
-            now = datetime.datetime.now()
-            return {
-                "category": "general",
-                "content": "Reminder",
-                "time": now.strftime("%Y-%m-%d %H:%M"),
-                "repeat": '{"type": "none"}',
-                "timezone": timezone,
-            }
-
-    def _detect_category(self, text: str) -> str:
-        text_lower = text.lower()
-        
-        category_patterns = {
-            "medicine": [r'قرص', r'دارو', r'دوا', r'medicine', r'pill', r'medication'],
-            "birthday": [r'تولد', r'birthday', r'عيد ميلاد'],
-            "installment": [r'قسط', r'installment', r'قرض'],
-            "work": [r'کار', r'work', r'جلسه', r'meeting', r'عمل'],
-            "exercise": [r'ورزش', r'exercise', r'تمرين'],
-            "prayer": [r'نماز', r'prayer', r'صلاة'],
-            "shopping": [r'خرید', r'shopping', r'تسوق'],
-            "call": [r'تماس', r'call', r'اتصال'],
-            "study": [r'درس', r'study', r'دراسة'],
-            "bill": [r'قبض', r'bill', r'فاتورة'],
-            "appointment": [r'قرار', r'appointment', r'موعد']
-        }
-        
-        for category, patterns in category_patterns.items():
-            for pattern in patterns:
-                if re.search(pattern, text_lower, re.IGNORECASE):
-                    return category
-        
-        return "general"
-
-    def _calculate_smart_time(self, text: str, now: datetime.datetime, repeat_pattern) -> datetime.datetime:
-        if repeat_pattern.type == 'interval':
-            if repeat_pattern.unit == 'minutes':
-                return now + datetime.timedelta(minutes=repeat_pattern.value)
-            elif repeat_pattern.unit == 'hours':
-                return now + datetime.timedelta(hours=repeat_pattern.value)
-            elif repeat_pattern.unit == 'days':
-                return now + datetime.timedelta(days=repeat_pattern.value)
-        return now
-
-    async def parse(self, language: str, timezone: str, text: str) -> Dict[str, Any]:
+    async def parse(self, language: str, timezone: str, text: str, user_calendar: str = "miladi") -> Dict[str, Any]:
         if not text or not isinstance(text, str) or len(text.strip()) == 0:
             raise ValueError("Invalid input text")
             
@@ -137,50 +69,77 @@ class AIHandler:
             )
         except Exception as e:
             self.logger.error(f"Error preparing parse request: {e}")
-            return self.fallback(text, timezone)
+            self.logger.error(f"Failed to get valid AI response for: {text}")
+            raise Exception("AI parsing failed")
         prompt = f"""
-Parse a reminder from user text in ANY language.
+Parse reminders from user text in ANY language/script. Extract multiple reminders if present.
 
-now="{g_now}"           // ISO, e.g. 2025-08-31T03:20:00
-timezone="{timezone}"   // IANA, e.g. Europe/Amsterdam
-text="{text}"
+Inputs:
+- now="{g_now}"           // Current system time (ISO)
+- timezone="{timezone}"   // User timezone (IANA)  
+- text="{text}"
+- user_calendar="{user_calendar}" // miladi|shamsi|qamari
+- shamsi_now="{p_now}"    // Current time in Jalali (if available)
 
-OUTPUT: Return ONLY valid JSON:
+OUTPUT: Strict JSON only:
 {{
   "reminders": [
     {{
       "category": "medicine|birthday|appointment|work|exercise|prayer|shopping|call|study|installment|bill|general",
-      "content": "string (keep user's language)",
-      "time": "YYYY-MM-DD HH:mm",   // 24h, localized to timezone
+      "content": "clean, corrected title (≤40 chars, in user's language)",
+      "time": "YYYY-MM-DD HH:mm",   // ALWAYS Gregorian format
       "repeat": {{ "type": "none|daily|weekly|monthly|yearly|interval", "value": number|null, "unit": "minutes|hours|days|weeks|null" }}
     }}
   ]
 }}
 
-ANALYSIS STEPS:
-1) COUNT DETECTION: Look for quantity indicators in ANY language (numbers, words like "three/سه/ثلاثة/три")
-2) ITEM ENUMERATION: Identify each distinct item mentioned:
-   - Sequence patterns: "first...second...third" or "یکی...یکی...دیگری" or "الأول...الثاني...الثالث"
-   - Even if some are described in past tense, they are still separate items needing reminders
-3) TIME EXTRACTION: Extract ALL time references mentioned:
-   - Past times + repeat pattern = future reminders starting from those times
-   - Relative times: "last night/دیشب/البارحة" = previous day
-   - Time formats: "1 midnight/1 نصف شب/1 منتصف الليل" = 01:00 next day
-4) REPEAT APPLICATION: If repeat mentioned, apply to ALL items identified in step 2
-5) FUTURE CALCULATION: For past times with repeat, calculate next occurrence
+CALENDAR CONVERSION RULES:
+- CRITICAL: The "time" field must ALWAYS be in Gregorian (miladi) format YYYY-MM-DD HH:mm  
+- If user_calendar="shamsi":
+  • If text contains Persian month names (مهر، آبان، etc.) → convert shamsi to Gregorian
+  • If text is in Persian/Farsi language but no specific month mentioned (e.g., "دهم هر ماه") → interpret day numbers in current shamsi month, then convert to Gregorian
+  • Current shamsi date context: shamsi_now shows current shamsi date for reference
+- If user_calendar="qamari" and text contains Islamic month names → convert qamari to Gregorian  
+- If user_calendar="miladi" or text clearly in English/other non-Persian languages → treat as Gregorian
+- Persian months: فروردین=1, اردیبهشت=2, خرداد=3, تیر=4, مرداد=5, شهریور=6, مهر=7, آبان=8, آذر=9, دی=10, بهمن=11, اسفند=12
+- Example: user_calendar="shamsi" + Persian text "دهم هر ماه" = 10th of shamsi months, convert each occurrence to Gregorian
 
-CRITICAL RULES:
-- If text says "N items" (like "سه تا قرص/three pills/ثلاث حبوب"), create exactly N reminders
-- Past tense + repeat pattern = create future reminder from that time
-- "midnight/نصف شب/منتصف الليل" = 01:00 next day
-- Always match the count: if "three" mentioned, output exactly 3 reminders
-- INCLUDE ALL ITEMS: Even past actions with times are items needing future reminders
+RULES:
+1. MULTIPLE ITEMS  
+   - If text mentions several times or items ("and", "&", "و", "et", "y", "und", …), create separate reminders.  
+   - Example: "Monday and Wednesday" → 2 reminders.
 
-EXAMPLE LOGIC:
-"I have 3 pills. One I took last night at 7, one at 8, another at 1 midnight. Every 8 hours remind me"
-→ 3 reminders: next 7:00, next 8:00, next 1:00 (all with 8-hour repeat)
+2. TIME EXTRACTION  
+   - If explicit (e.g., "9 PM", "21:30", "۹ شب", "mercredi 10h") → use it.  
+   - If none → fallback to `now`.  
+   - Map dayparts across languages: morning → AM, evening/night → PM, "half past" = +30 min, "quarter past" = +15, "quarter to" = −15.  
 
-OUTPUT FORMAT: Always use "reminders" array. Return ONLY raw JSON - no markdown, no explanations.
+3. REPEAT LOGIC  
+   - "Every day / daily / todos los días / هر روز" → daily.  
+   - "Every week / weekly / chaque semaine" → weekly.  
+   - "Every Monday" → weekly, anchor Monday.  
+   - "Monday and Wednesday" + with "every" → 2 reminders, each weekly.  
+   - "Monday and Wednesday" without "every" → 2 reminders, repeat=none.  
+   - "Every month day 10" → monthly, anchor day=10.  
+   - Interval phrases: "every 8 hours / هر ۸ ساعت / каждые 8 часов" → interval.
+
+4. CONTENT CLEANING  
+   - Keep only the object/action: medicine, call, meeting, shopping item, etc.  
+   - For medicine: "<form> <name>" (e.g., "قرص کلداستاپ", "pill ibuprofen"). If no name → generic like "قرص / pill".  
+   - Remove fillers: maybe / I think / فکر کنم / tal vez / vielleicht / наверное.  
+   - Correct spelling and spacing (normalize tokens like "کلد استاپ / کلدیستاپ" → "کلداستاپ").  
+   - Do NOT include time words inside content.  
+   - Max length ≈40 chars.
+
+5. DEFAULTS  
+   - If no time given → use `now` as base.  
+   - If only date given without hour/minute → set HH:mm = current local time.  
+   - Repeat=none unless explicitly specified by words like "every/daily/weekly/monthly".
+
+STRICT REQUIREMENTS:  
+- JSON only, no extra text or markdown.  
+- Do not echo full sentences, only normalized concise titles in "content".
+- ALWAYS output dates in Gregorian format regardless of input calendar type.
         """
         try:
             async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
@@ -202,13 +161,13 @@ OUTPUT FORMAT: Always use "reminders" array. Return ONLY raw JSON - no markdown,
                 ) as response:
                     if response.status != 200:
                         self.logger.error(f"API request failed with status {response.status}")
-                        return self.fallback(text, timezone)
+                        raise Exception(f"API failed with status {response.status}")
                         
                     data = await response.json()
                     
                     if "choices" not in data or not data["choices"]:
                         self.logger.error("No choices in API response")
-                        return self.fallback(text, timezone)
+                        raise Exception("No choices in API response")
                         
                     content = data["choices"][0]["message"]["content"].strip()
                     self.logger.info(f"OpenRouter response: {content}")
@@ -221,38 +180,60 @@ OUTPUT FORMAT: Always use "reminders" array. Return ONLY raw JSON - no markdown,
                     content = content.strip()
                     obj = json.loads(content)
                     self.logger.info(f"Parsed JSON: {obj}")
+                    # Determine if user explicitly provided a time; used for default time fallback
+                    try:
+                        import re as _re
+                        now_utc = datetime.datetime.utcnow()
+                        now_local = now_utc + _parse_tz(timezone)
+                        # Heuristic: look for HH:mm (e.g., 10:30), am/pm, or localized hints like 'ساعت 10'
+                        time_pattern = _re.compile(r"(\b[01]?\d|2[0-3]):[0-5]\d|\b(am|pm)\b|\bساعت\s*\d{1,2}", _re.IGNORECASE)
+                        user_provided_time = bool(time_pattern.search(text))
+                    except Exception:
+                        user_provided_time = True  # be safe: don't override on detection failure
                     if "reminders" in obj and isinstance(obj["reminders"], list):
                         validated_reminders = []
                         for reminder in obj["reminders"]:
                             if self._validate_parsed_object(reminder):
+                                # Fallback: if no explicit time and AI defaulted to 00:00, set to user's current HH:mm
+                                try:
+                                    if not user_provided_time:
+                                        hhmm = reminder["time"][-5:]
+                                        if hhmm == "00:00":
+                                            reminder["time"] = reminder["time"][:-5] + now_local.strftime("%H:%M")
+                                except Exception:
+                                    pass
                                 reminder.setdefault("timezone", timezone)
                                 reminder["content"] = str(reminder["content"])[:500]
-                                if isinstance(reminder.get("repeat"), dict):
-                                    reminder["repeat"] = json.dumps(reminder["repeat"])
                                 validated_reminders.append(reminder)
                         
                         if validated_reminders:
-                            return {"reminders": validated_reminders}
+                            return {"reminders": validated_reminders, "message": None}
                         else:
-                            self.logger.warning("No valid reminders found, using fallback")
-                            return self.fallback(text, timezone)
+                            self.logger.warning("No valid reminders found in AI response")
+                            return {"reminders": [], "message": "ai_error"}
                     
                     elif self._validate_parsed_object(obj):
                         obj.setdefault("repeat", "none")
+                        # Single reminder path: apply the same fallback for missing time
+                        try:
+                            if not user_provided_time:
+                                hhmm = obj["time"][-5:]
+                                if hhmm == "00:00":
+                                    obj["time"] = obj["time"][:-5] + now_local.strftime("%H:%M")
+                        except Exception:
+                            pass
                         obj.setdefault("timezone", timezone)
                         obj["content"] = str(obj["content"])[:500]
-                        if isinstance(obj.get("repeat"), dict):
-                            obj["repeat"] = json.dumps(obj["repeat"])
-                        return obj
+                        return {"reminders": [obj], "message": None}
                     
                     else:
-                        self.logger.warning(f"Invalid parsed object: {obj}, using fallback")
-                        return self.fallback(text, timezone)
+                        self.logger.warning(f"Invalid parsed object: {obj}")
+                        return {"reminders": [], "message": "ai_error"}
                     
         except (aiohttp.ClientError, ValueError, KeyError, json.JSONDecodeError, asyncio.TimeoutError) as e:
             self.logger.error(f"AI parsing error: {e}")
-            self.logger.info(f"Using fallback for text: {text}")
-            return self.fallback(text, timezone)
+            self.logger.error(f"Error type: {type(e).__name__}")
+            raise Exception(f"AI parsing completely failed: {e}")
             
     def _validate_parsed_object(self, obj: Any) -> bool:
         if not isinstance(obj, dict):
@@ -273,28 +254,32 @@ OUTPUT FORMAT: Always use "reminders" array. Return ONLY raw JSON - no markdown,
 
         if "repeat" in obj:
             if isinstance(obj["repeat"], str):
-
                 if obj["repeat"] in ["none", "daily", "weekly", "monthly", "yearly"]:
                     obj["repeat"] = f'{{"type": "{obj["repeat"]}"}}'
-                elif re.match(r'^every_\d+_hours$', obj["repeat"]):
-
-                    match = re.match(r'^every_(\d+)_hours$', obj["repeat"])
+                elif re.match(r'^every_\d+_(hours|minutes|days|weeks)$', obj["repeat"]):
+                    match = re.match(r'^every_(\d+)_(hours|minutes|days|weeks)$', obj["repeat"])
                     if match:
-                        hours = int(match.group(1))
-                        obj["repeat"] = f'{{"type": "interval", "value": {hours}, "unit": "hours"}}'
+                        value = int(match.group(1))
+                        unit = match.group(2)
+                        obj["repeat"] = f'{{"type": "interval", "value": {value}, "unit": "{unit}"}}'
                 else:
                     obj["repeat"] = '{"type": "none"}'
             elif isinstance(obj["repeat"], dict):
-
-                repeat_pattern = self.repeat_handler.from_json(json.dumps(obj["repeat"]))
-                if not self.repeat_handler.is_valid_pattern(repeat_pattern):
-                    obj["repeat"] = '{"type": "none"}'
+                # AI returned a dict, validate and keep it
+                if obj["repeat"].get("type") == "interval":
+                    if not isinstance(obj["repeat"].get("value"), (int, float)) or not obj["repeat"].get("unit"):
+                        obj["repeat"] = '{"type": "none"}'
+                elif obj["repeat"].get("type") in ["none", "daily", "weekly", "monthly", "yearly"]:
+                    pass  # Valid simple type
                 else:
-                    obj["repeat"] = json.dumps(obj["repeat"])
+                    obj["repeat"] = '{"type": "none"}'
             else:
                 obj["repeat"] = '{"type": "none"}'
         else:
             obj["repeat"] = '{"type": "none"}'
+        
+        # Ensure repeat is always a JSON string
+        self._normalize_repeat_field(obj)
             
         try:
             parsed_time = datetime.datetime.strptime(obj["time"], "%Y-%m-%d %H:%M")
@@ -305,6 +290,11 @@ OUTPUT FORMAT: Always use "reminders" array. Return ONLY raw JSON - no markdown,
             return False
             
         return True
+    
+    def _normalize_repeat_field(self, obj: dict) -> None:
+        """Ensure repeat field is always a JSON string"""
+        if "repeat" in obj and isinstance(obj["repeat"], dict):
+            obj["repeat"] = json.dumps(obj["repeat"])
         
     async def parse_edit(self, current_reminder: dict, edit_text: str, timezone: str) -> Dict[str, Any]:
         """Parse edit request with context of current reminder"""
@@ -386,9 +376,8 @@ Return ONLY raw JSON - no markdown, no explanations.
                     obj = json.loads(content)
                     self.logger.info(f"Edit analysis result: {obj}")
                     
-                    # Convert repeat object to JSON string if needed
-                    if isinstance(obj.get("repeat"), dict):
-                        obj["repeat"] = json.dumps(obj["repeat"])
+                    # Normalize repeat field
+                    self._normalize_repeat_field(obj)
                     
                     return obj
                     
