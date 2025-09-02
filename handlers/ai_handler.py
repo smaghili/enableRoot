@@ -63,7 +63,7 @@ class AIHandler:
         prompt = f"""
 Extract reminder patterns from user text. Support ALL languages.
 Inputs: text="{text}"
-OUTPUT: Strict JSON only:
+OUTPUT: Strict JSON only::
 {{
   "reminders": [
     {{
