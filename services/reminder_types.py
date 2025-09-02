@@ -50,19 +50,43 @@ class MedicineReminder(ReminderType):
 class BirthdayReminder(ReminderType):
     def get_emoji(self) -> str:
         return "🎂"
-    
     def get_category_name(self) -> str:
         return "birthday"
-    
     def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
                                 callback_data=f"stop_{reminder_id}")]
         ])
-    
     def format_message(self, content: str, lang: str, t_func) -> str:
         return f"🎂 {content}"
-    
+    def validate_content(self, content: str) -> bool:
+        return len(content.strip()) > 0
+class BirthdayWeekBeforeReminder(ReminderType):
+    def get_emoji(self) -> str:
+        return "📅"
+    def get_category_name(self) -> str:
+        return "birthday_pre_week"
+    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
+                                callback_data=f"stop_{reminder_id}")]
+        ])
+    def format_message(self, content: str, lang: str, t_func) -> str:
+        return t_func(lang, "birthday_week_before").format(content=content)
+    def validate_content(self, content: str) -> bool:
+        return len(content.strip()) > 0
+class BirthdayThreeDaysBeforeReminder(ReminderType):
+    def get_emoji(self) -> str:
+        return "📅"
+    def get_category_name(self) -> str:
+        return "birthday_pre_three"
+    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
+                                callback_data=f"stop_{reminder_id}")]
+        ])
+    def format_message(self, content: str, lang: str, t_func) -> str:
+        return t_func(lang, "birthday_three_days_before").format(content=content)
     def validate_content(self, content: str) -> bool:
         return len(content.strip()) > 0
 
@@ -97,7 +121,7 @@ class WorkReminder(ReminderType):
         return "work"
     
     def create_keyboard(self, reminder_id: int, lang: str, t_func) -> Optional[InlineKeyboardMarkup]:
-        return None  # No special buttons for work reminders
+        return None
     
     def format_message(self, content: str, lang: str, t_func) -> str:
         return f"💼 {content}"
@@ -151,17 +175,19 @@ class ReminderFactory:
     _reminder_types = {
         "medicine": MedicineReminder,
         "birthday": BirthdayReminder,
+        "birthday_pre_week": BirthdayWeekBeforeReminder,
+        "birthday_pre_three": BirthdayThreeDaysBeforeReminder,
         "installment": InstallmentReminder,
         "installment_retry": InstallmentRetryReminder,
         "work": WorkReminder,
         "general": GeneralReminder,
-        "appointment": WorkReminder,  # Reuse work reminder
+        "appointment": WorkReminder,
         "exercise": WorkReminder,
         "prayer": WorkReminder,
         "shopping": WorkReminder,
         "call": WorkReminder,
         "study": WorkReminder,
-        "bill": InstallmentReminder,  # Reuse installment reminder
+        "bill": InstallmentReminder,
     }
     
     @classmethod

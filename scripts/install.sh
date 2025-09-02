@@ -255,7 +255,6 @@ show_completion() {
     echo -e "${BLUE}Useful commands:${NC}"
     echo "• View logs: tail -f bot.log"
     echo "• Stop bot: Ctrl+C (if running manually)"
-    echo "• Update bot: git pull && ./install.sh"
     echo
     print_status "Happy bot running! 🤖"
 }

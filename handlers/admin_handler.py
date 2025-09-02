@@ -99,7 +99,7 @@ class AdminHandler:
         user_id = message.from_user.id
         try:
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             admin_ids = config_data["bot"]["admin_ids"]
@@ -160,21 +160,21 @@ class AdminHandler:
         
         keyboard = [
             [InlineKeyboardButton(
-                text=f"{status_icon} {self.t(lang, 'admin_forced_join_toggle')}",
+                text=self.t(lang, 'admin_forced_join_toggle'),
                 callback_data="forced_join_toggle"
             )],
             [InlineKeyboardButton(
-                text=f"➕ {self.t(lang, 'admin_forced_join_add')}",
+                text=self.t(lang, 'admin_forced_join_add'),
                 callback_data="forced_join_add"
             )],
             [InlineKeyboardButton(
-                text=f"📋 {self.t(lang, 'admin_forced_join_list')}",
+                text=self.t(lang, 'admin_forced_join_list'),
                 callback_data="forced_join_list"
             )]
         ]
         
         kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
-        text = self.t(lang, "admin_forced_join_status").format(status=status_text)
+        text = self.t(lang, "admin_forced_join_status").format(status=f"{status_icon} {status_text}")
         self.in_forced_join_menu.add(message.from_user.id)
         await message.answer(text, reply_markup=kb)
 
@@ -195,12 +195,12 @@ class AdminHandler:
     async def handle_forced_join_toggle(self, message: Message, lang: str):
         try:
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             config_data["bot"]["forced_join"]["enabled"] = not config_data["bot"]["forced_join"]["enabled"]
             
-            with open("config.json", "w") as f:
+            with open("config/config.json", "w") as f:
                 json.dump(config_data, f, indent=2)
             
             status = "enabled" if config_data["bot"]["forced_join"]["enabled"] else "disabled"
@@ -278,13 +278,13 @@ class AdminHandler:
             new_admin_id = int(message.text.strip())
             
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             if new_admin_id not in config_data["bot"]["admin_ids"]:
                 config_data["bot"]["admin_ids"].append(new_admin_id)
                 
-                with open("config.json", "w") as f:
+                with open("config/config.json", "w") as f:
                     json.dump(config_data, f, indent=2)
                 
                 await message.answer(self.t(lang, "admin_added_success").format(admin_id=new_admin_id))
@@ -365,13 +365,13 @@ class AdminHandler:
                 channel = "@" + channel_input
             
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             if channel not in config_data["bot"]["forced_join"]["channels"]:
                 config_data["bot"]["forced_join"]["channels"].append(channel)
                 
-                with open("config.json", "w") as f:
+                with open("config/config.json", "w") as f:
                     json.dump(config_data, f, indent=2)
                 
                 await message.answer(self.t(lang, "admin_channel_added").format(channel=channel))
@@ -395,12 +395,12 @@ class AdminHandler:
                 return
             
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             config_data["bot"]["max_reminders_per_user"] = new_limit
             
-            with open("config.json", "w") as f:
+            with open("config/config.json", "w") as f:
                 json.dump(config_data, f, indent=2)
             
             self.config.max_reminders_per_user = new_limit
@@ -420,7 +420,7 @@ class AdminHandler:
 
     def get_current_limit_from_config(self):
         try:
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             return config_data["bot"]["max_reminders_per_user"]
         except Exception:
@@ -428,7 +428,7 @@ class AdminHandler:
 
     def get_forced_join_status_from_config(self):
         try:
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             return config_data["bot"]["forced_join"]["enabled"]
         except Exception:
@@ -507,14 +507,14 @@ class AdminHandler:
     async def handle_forced_join_toggle_inline(self, callback: CallbackQuery, lang: str):
         try:
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             current_status = config_data["bot"]["forced_join"]["enabled"]
             new_status = not current_status
             config_data["bot"]["forced_join"]["enabled"] = new_status
             
-            with open("config.json", "w") as f:
+            with open("config/config.json", "w") as f:
                 json.dump(config_data, f, indent=2)
             
             self.config.forced_join["enabled"] = new_status
@@ -541,7 +541,7 @@ class AdminHandler:
     async def handle_forced_join_list_inline(self, callback: CallbackQuery, lang: str):
         try:
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             channels = config_data["bot"]["forced_join"]["channels"]
@@ -557,7 +557,7 @@ class AdminHandler:
                     )])
                 
                 keyboard.append([InlineKeyboardButton(
-                    text=f"🔙 {self.t(lang, 'back')}",
+                    text=self.t(lang, 'back'),
                     callback_data="back_to_forced_join"
                 )])
                 
@@ -566,7 +566,7 @@ class AdminHandler:
             else:
                 text = self.t(lang, "admin_no_channels")
                 keyboard = [[InlineKeyboardButton(
-                    text=f"🔙 {self.t(lang, 'back')}",
+                    text=self.t(lang, 'back'),
                     callback_data="back_to_forced_join"
                 )]]
                 kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -604,13 +604,13 @@ class AdminHandler:
     async def delete_channel_confirmed(self, callback: CallbackQuery, lang: str, channel_name: str):
         try:
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             if channel_name in config_data["bot"]["forced_join"]["channels"]:
                 config_data["bot"]["forced_join"]["channels"].remove(channel_name)
                 
-                with open("config.json", "w") as f:
+                with open("config/config.json", "w") as f:
                     json.dump(config_data, f, indent=2)
                 
                 await callback.answer(self.t(lang, "admin_channel_deleted").format(channel=channel_name))
@@ -637,21 +637,21 @@ class AdminHandler:
         
         keyboard = [
             [InlineKeyboardButton(
-                text=f"{status_icon} {self.t(lang, 'admin_forced_join_toggle')}",
+                text=self.t(lang, 'admin_forced_join_toggle'),
                 callback_data="forced_join_toggle"
             )],
             [InlineKeyboardButton(
-                text=f"➕ {self.t(lang, 'admin_forced_join_add')}",
+                text=self.t(lang, 'admin_forced_join_add'),
                 callback_data="forced_join_add"
             )],
             [InlineKeyboardButton(
-                text=f"📋 {self.t(lang, 'admin_forced_join_list')}",
+                text=self.t(lang, 'admin_forced_join_list'),
                 callback_data="forced_join_list"
             )]
         ]
         
         kb = InlineKeyboardMarkup(inline_keyboard=keyboard)
-        text = self.t(lang, "admin_forced_join_status").format(status=status_text)
+        text = self.t(lang, "admin_forced_join_status").format(status=f"{status_icon} {status_text}")
         
         try:
             await message.edit_text(text, reply_markup=kb)
@@ -698,13 +698,13 @@ class AdminHandler:
     async def remove_admin_from_config(self, admin_id: int, callback: CallbackQuery, lang: str):
         try:
             config_data = {}
-            with open("config.json", "r") as f:
+            with open("config/config.json", "r") as f:
                 config_data = json.load(f)
             
             if admin_id in config_data["bot"]["admin_ids"]:
                 config_data["bot"]["admin_ids"].remove(admin_id)
                 
-                with open("config.json", "w") as f:
+                with open("config/config.json", "w") as f:
                     json.dump(config_data, f, indent=2)
                 
                 success_text = self.t(lang, "admin_removed_success").format(admin_id=admin_id)
