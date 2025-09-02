@@ -52,8 +52,11 @@
   "stats": "📊 آمار شما:\n🟢 فعال: {active}\n✅ تکمیل شده: {completed}",
 
   "ai_error": "❌ متاسفانه نتوانستم متن شما را درک کنم. لطفاً واضح‌تر بنویسید.",
-  "birthday_week_before": "📅 1 هفته تا {content}",
-  "birthday_three_days_before": "📅 3 روز تا {content}",
+  "birthday_week_before": "🎉 یک هفته مونده به تولد {content}!",
+  "birthday_three_days_before": "🎈 سه روز به تولد {content} مونده!",
+  "birthday_main_message": "🎂 تولد {content} هستش! 🎈",
+  "birthday_first_congratulator": "🥇 اولین نفر تولدشو تبریک بگو.",
+  "medicine_reminder": "یادآوری دارو: {content}",
   "installment_reminder": "⚠️ یادآوری قسط: {content}",
   "change_timezone": "🕐 تغییر تایم‌زون",
   "change_calendar": "📅 تغییر تقویم",

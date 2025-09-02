@@ -8,6 +8,7 @@ OUTPUT: Strict JSON only:
       "content": "clean title (≤40 chars)",
       "time_hour": number|null,
       "relative_days": number|null,
+      "specific_date": {{ "day": number|null, "month": number|null, "year": number|null }},
       "repeat": {{ "type": "none|daily|weekly|monthly|yearly|interval", "value": number|null, "unit": "minutes|hours|days|weeks|null", "day": number|null, "weekday": "monday|tuesday|wednesday|thursday|friday|saturday|sunday"|null }}
     }}
   ]
@@ -20,7 +21,14 @@ RULES:
 5. Weekly multiple: "Monday and Wednesday" / "دوشنبه و چهارشنبه" → CREATE 2 SEPARATE reminders, each with {{"type": "weekly", "weekday": "monday"}} and {{"type": "weekly", "weekday": "wednesday"}}
 6. Time extraction: "at 7" / "ساعت 7" / "a las 7" → "time_hour": 7
 7. Relative dates: "فردا/tomorrow" → "relative_days": 1, "پسفردا" → 2, "سه روز دیگه" → 3, "پریروز" → -2, "دیروز" → -1, "امروز" → 0
-8. Content: Remove time/schedule words, keep action/object only
-9. Category: Detect from content
+8. Specific dates: "۱/۱۲/۱۳۵۰" → "specific_date": {{"day": 1, "month": 12, "year": 1350}}, "2025/03/15" → "specific_date": {{"day": 15, "month": 3, "year": 2025}}
+9. Birthday dates: For birthdays with year (like ۱/۱۲/۱۳۵۰), keep the exact year provided - do NOT change to current year
+10. Content: Remove time/schedule words, keep action/object only
+11. Medicine content: For medicine reminders, extract ONLY the medicine name without action verbs
+    - "قرص سفالکسین بخورم" → "قرص سفالکسین"
+    - "شربت آموکسی سیلین مصرف کنم" → "شربت آموکسی سیلین"
+    - "take aspirin pill" → "aspirin pill"
+    - "drink cough syrup" → "cough syrup"
+12. Category: Detect from content
 CRITICAL: If text mentions multiple days (and/or), create separate reminders for each day.
 JSON only, no markdown.

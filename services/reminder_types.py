@@ -41,7 +41,7 @@ class MedicineReminder(ReminderType):
         ])
     
     def format_message(self, content: str, lang: str, t_func) -> str:
-        return f"💊 {content}"
+        return t_func(lang, "medicine_reminder").format(content=content)
     
     def validate_content(self, content: str) -> bool:
         return len(content.strip()) > 0 and len(content) <= 100
@@ -58,7 +58,9 @@ class BirthdayReminder(ReminderType):
                                 callback_data=f"stop_{reminder_id}")]
         ])
     def format_message(self, content: str, lang: str, t_func) -> str:
-        return f"🎂 {content}"
+        main_msg = t_func(lang, "birthday_main_message").format(content=content)
+        first_msg = t_func(lang, "birthday_first_congratulator")
+        return f"{main_msg}\n{first_msg}"
     def validate_content(self, content: str) -> bool:
         return len(content.strip()) > 0
 class BirthdayWeekBeforeReminder(ReminderType):

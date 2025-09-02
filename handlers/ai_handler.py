@@ -6,10 +6,7 @@ import re
 import asyncio
 from typing import Dict, Any, Optional
 from config.prompt_manager import PromptManager
-try:
-    import jdatetime
-except ImportError:
-    jdatetime = None
+
 try:
     from convertdate import persian, islamic
 except ImportError:
@@ -86,8 +83,8 @@ class AIHandler:
             now = datetime.datetime.now()
             g_now = now.strftime("%Y-%m-%d %H:%M")
             p_now = (
-                jdatetime.datetime.fromgregorian(datetime=now).strftime("%Y-%m-%d %H:%M")
-                if jdatetime
+                f"{persian.from_gregorian(now.year, now.month, now.day)[0]}-{persian.from_gregorian(now.year, now.month, now.day)[1]:02d}-{persian.from_gregorian(now.year, now.month, now.day)[2]:02d} {now.hour:02d}:{now.minute:02d}"
+                if persian
                 else "N/A"
             )
         except Exception as e:
@@ -150,6 +147,69 @@ class AIHandler:
             raise Exception(f"AI parsing completely failed: {e}")
     def _calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
         now = datetime.datetime.now()
+        
+        specific_date = reminder.get("specific_date")
+        if specific_date and isinstance(specific_date, dict):
+            day = specific_date.get("day")
+            month = specific_date.get("month")
+            year = specific_date.get("year")
+            if day and month:
+                time_hour = reminder.get("time_hour")
+                target_hour = int(time_hour) if time_hour is not None else now.hour
+                target_minute = 0 if time_hour is not None else now.minute
+                if reminder.get("category") == "birthday" and year:
+                    if user_calendar == "shamsi" and persian:
+                        current_shamsi = persian.from_gregorian(now.year, now.month, now.day)
+                        current_year = current_shamsi[0]
+                        try:
+                            gregorian_date = persian.to_gregorian(current_year, month, day)
+                            target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
+                            if target_date < now:
+                                gregorian_date = persian.to_gregorian(current_year + 1, month, day)
+                                target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
+                        except Exception:
+                            return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+                    else:
+                        try:
+                            target_date = datetime.datetime(now.year, month, day, target_hour, target_minute)
+                            if target_date < now:
+                                target_date = datetime.datetime(now.year + 1, month, day, target_hour, target_minute)
+                        except Exception:
+                            return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+                else:
+                    if user_calendar == "shamsi" and persian and year:
+                        try:
+                            gregorian_date = persian.to_gregorian(year, month, day)
+                            target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
+                        except Exception:
+                            return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+                    elif year:
+                        try:
+                            target_date = datetime.datetime(year, month, day, target_hour, target_minute)
+                        except Exception:
+                            return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+                    else:
+                        try:
+                            target_date = datetime.datetime(now.year, month, day, target_hour, target_minute)
+                        except Exception:
+                            return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+                if target_date < now and reminder.get("category") != "birthday":
+                    if user_calendar == "shamsi" and persian:
+                        shamsi_target = persian.from_gregorian(target_date.year, target_date.month, target_date.day)
+                        shamsi_now = persian.from_gregorian(now.year, now.month, now.day)
+                        detected_date_str = f"{shamsi_target[0]}-{shamsi_target[1]:02d}-{shamsi_target[2]:02d} {target_date.hour:02d}:{target_date.minute:02d}"
+                        current_date_str = f"{shamsi_now[0]}-{shamsi_now[1]:02d}-{shamsi_now[2]:02d} {now.hour:02d}:{now.minute:02d}"
+                    elif user_calendar == "qamari" and islamic:
+                        hijri_target = islamic.from_gregorian(target_date.year, target_date.month, target_date.day)
+                        hijri_now = islamic.from_gregorian(now.year, now.month, now.day)
+                        detected_date_str = f"{hijri_target[0]}-{hijri_target[1]:02d}-{hijri_target[2]:02d} {target_date.hour:02d}:{target_date.minute:02d}"
+                        current_date_str = f"{hijri_now[0]}-{hijri_now[1]:02d}-{hijri_now[2]:02d} {now.hour:02d}:{now.minute:02d}"
+                    else:
+                        detected_date_str = target_date.strftime("%Y-%m-%d %H:%M")
+                        current_date_str = now.strftime("%Y-%m-%d %H:%M")
+                    return f"PAST_DATE_ERROR|{detected_date_str}|{current_date_str}"
+                return target_date.strftime("%Y-%m-%d %H:%M")
+        
         relative_days = reminder.get("relative_days")
         if relative_days is not None:
             time_hour = reminder.get("time_hour")
@@ -190,18 +250,18 @@ class AIHandler:
             target_minute = now.minute
         if repeat_type == "monthly" and "day" in repeat_data:
             target_day = repeat_data["day"]
-            if user_calendar == "shamsi" and jdatetime:
-                shamsi_now = jdatetime.datetime.fromgregorian(datetime=now)
-                current_day = shamsi_now.day
+            if user_calendar == "shamsi" and persian:
+                shamsi_now = persian.from_gregorian(now.year, now.month, now.day)
+                current_day = shamsi_now[2]
                 if target_day <= current_day:
-                    if shamsi_now.month == 12:
-                        next_month = shamsi_now.replace(year=shamsi_now.year + 1, month=1, day=target_day, hour=target_hour, minute=target_minute)
+                    if shamsi_now[1] == 12:
+                        gregorian_date = persian.to_gregorian(shamsi_now[0] + 1, 1, target_day)
                     else:
-                        next_month = shamsi_now.replace(month=shamsi_now.month + 1, day=target_day, hour=target_hour, minute=target_minute)
+                        gregorian_date = persian.to_gregorian(shamsi_now[0], shamsi_now[1] + 1, target_day)
                 else:
-                    next_month = shamsi_now.replace(day=target_day, hour=target_hour, minute=target_minute)
-                gregorian_date = next_month.togregorian()
-                return f"{gregorian_date.year}-{gregorian_date.month:02d}-{gregorian_date.day:02d} {gregorian_date.hour:02d}:{gregorian_date.minute:02d}"
+                    gregorian_date = persian.to_gregorian(shamsi_now[0], shamsi_now[1], target_day)
+                target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
+                return target_date.strftime("%Y-%m-%d %H:%M")
             else:
                 current_day = now.day
                 if target_day <= current_day:
