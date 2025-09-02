@@ -273,32 +273,7 @@ class ReminderMessageHandler(IMessageHandler):
 
     async def get_timezone_from_city(self, city_name: str, user_lang: str):
         try:
-            prompt = f"""You are a global timezone expert. Detect timezone for any city worldwide.
-City: "{city_name}"
-User language: {user_lang}
-TASK: Find the timezone offset for this city. Consider:
-- Major cities and small towns
-- Alternative spellings and local names
-- Country context if city name is ambiguous
-- Current standard time (not daylight saving)
-OUTPUT: Return ONLY this JSON format:
-{{"city": "CityName, Country", "timezone": "+XX:XX"}}
-TIMEZONE RULES:
-- Iran (all cities): +03:30
-- India (all cities): +05:30
-- China (all cities): +08:00
-- Russia: varies by region
-- USA: varies by state
-- Europe: varies by country
-If city not found or ambiguous, return: null
-Examples:
-- تهران/Tehran → {{"city": "Tehran, Iran", "timezone": "+03:30"}}
-- شیراز/Shiraz → {{"city": "Shiraz, Iran", "timezone": "+03:30"}}
-- رشت/Rasht → {{"city": "Rasht, Iran", "timezone": "+03:30"}}
-- New York → {{"city": "New York, USA", "timezone": "-05:00"}}
-- London → {{"city": "London, UK", "timezone": "+00:00"}}
-- Tokyo → {{"city": "Tokyo, Japan", "timezone": "+09:00"}}
-- Mumbai → {{"city": "Mumbai, India", "timezone": "+05:30"}}"""
+            prompt = self.ai.prompt_manager.get_prompt_with_params("timezone_detection", city_name=city_name, user_lang=user_lang)
             result = await self.ai.parse_timezone(prompt)
             return result
         except Exception as e:

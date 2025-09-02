@@ -1,0 +1,22 @@
+EDIT REMINDER ANALYSIS:
+Current reminder:
+- Content: "{content}"
+- Time: "{time}"
+- Category: "{category}"
+- Repeat: "{repeat}"
+User edit request: "{edit_text}"
+TASK: Determine what user wants to change and output the new reminder.
+RULES:
+1) If user only mentions new content (no time/schedule words), keep original time/repeat
+2) If user mentions time/schedule, update accordingly
+3) Extract clean content without instruction words
+4) Maintain original language style
+OUTPUT JSON:
+{{
+  "content": "cleaned_content_text",
+  "time": "YYYY-MM-DD HH:mm",
+  "category": "category",
+  "repeat": {{"type": "...", "value": null, "unit": null}},
+  "changed": ["content"] or ["content", "time", "repeat"]
+}}
+Return ONLY raw JSON - no markdown, no explanations.

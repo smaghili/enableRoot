@@ -5,6 +5,7 @@ import logging
 import re
 import asyncio
 from typing import Dict, Any, Optional
+from config.prompt_manager import PromptManager
 try:
     import jdatetime
 except ImportError:
@@ -33,22 +34,55 @@ def _parse_tz(tz: str) -> datetime.timedelta:
     except (ValueError, TypeError, IndexError):
         return datetime.timedelta(0)
 class AIHandler:
-    def __init__(self, key: str):
+    def __init__(self, key: str, model: str = "gpt-4o"):
         self.key = key
+        self.model = model
         self.logger = logging.getLogger(__name__)
         self.session_timeout = aiohttp.ClientTimeout(total=30)
+        self.prompt_manager = PromptManager()
         if not key or not isinstance(key, str):
             raise ValueError("Invalid API key provided")
+    
+    async def _make_api_call(self, messages: list, max_tokens: int = 400, temperature: float = 0.1):
+        headers = {
+            "Authorization": f"Bearer {self.key}",
+            "Content-Type": "application/json",
+        }
+        
+        async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
+            async with session.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "max_tokens": max_tokens,
+                    "temperature": temperature
+                },
+            ) as response:
+                if response.status != 200:
+                    self.logger.error(f"API request failed with status {response.status}")
+                    return None
+                
+                data = await response.json()
+                if "choices" not in data or not data["choices"]:
+                    self.logger.error("No choices in API response")
+                    return None
+                
+                content = data["choices"][0]["message"]["content"].strip()
+                if content.startswith("```json"):
+                    content = content[7:]
+                if content.startswith("```"):
+                    content = content[3:]
+                if content.endswith("```"):
+                    content = content[:-3]
+                return content.strip()
     async def parse(self, language: str, timezone: str, text: str, user_calendar: str = "miladi") -> Dict[str, Any]:
         if not text or not isinstance(text, str) or len(text.strip()) == 0:
             raise ValueError("Invalid input text")
         if len(text) > 1000:
             text = text[:1000]
         try:
-            headers = {
-                "Authorization": f"Bearer {self.key}",
-                "Content-Type": "application/json",
-            }
             now = datetime.datetime.now()
             g_now = now.strftime("%Y-%m-%d %H:%M")
             p_now = (
@@ -60,103 +94,56 @@ class AIHandler:
             self.logger.error(f"Error preparing parse request: {e}")
             self.logger.error(f"Failed to get valid AI response for: {text}")
             raise Exception("AI parsing failed")
-        prompt = f"""
-Extract reminder patterns from user text. Support ALL languages.
-Inputs: text="{text}"
-OUTPUT: Strict JSON only:
-{{
-  "reminders": [
-    {{
-      "category": "medicine|birthday|appointment|work|exercise|prayer|shopping|call|study|installment|bill|general",
-      "content": "clean title (≤40 chars)",
-      "time_hour": number|null,
-      "relative_days": number|null,
-      "repeat": {{ "type": "none|daily|weekly|monthly|yearly|interval", "value": number|null, "unit": "minutes|hours|days|weeks|null", "day": number|null, "weekday": "monday|tuesday|wednesday|thursday|friday|saturday|sunday"|null }}
-    }}
-  ]
-}}
-RULES:
-1. Monthly: "5th every month" / "5 هر ماه" / "5 cada mes" → {{"type": "monthly", "day": 5}}
-2. Interval: "every 8 hours" / "هر 8 ساعت" / "cada 8 horas" → {{"type": "interval", "value": 8, "unit": "hours"}}
-3. Daily: "every day" / "هر روز" / "todos los días" → {{"type": "daily"}}
-4. Weekly single: "every Friday" / "هر جمعه" / "cada viernes" → {{"type": "weekly", "weekday": "friday"}}
-5. Weekly multiple: "Monday and Wednesday" / "دوشنبه و چهارشنبه" → CREATE 2 SEPARATE reminders, each with {{"type": "weekly", "weekday": "monday"}} and {{"type": "weekly", "weekday": "wednesday"}}
-6. Time extraction: "at 7" / "ساعت 7" / "a las 7" → "time_hour": 7
-7. Relative dates: "فردا/tomorrow" → "relative_days": 1, "پسفردا" → 2, "سه روز دیگه" → 3, "پریروز" → -2, "دیروز" → -1, "امروز" → 0
-8. Content: Remove time/schedule words, keep action/object only
-9. Category: Detect from content
-CRITICAL: If text mentions multiple days (and/or), create separate reminders for each day.
-JSON only, no markdown.
-        """
+        prompt = self.prompt_manager.get_prompt_with_params("reminder_parsing", text=text)
         try:
-            async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
-                async with session.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": "gpt-4o",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are a multilingual reminder pattern parser that outputs JSON.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        "max_tokens": 400,
-                        "temperature": 0.1
-                    },
-                ) as response:
-                    if response.status != 200:
-                        self.logger.error(f"API request failed with status {response.status}")
-                        raise Exception(f"API failed with status {response.status}")
-                    data = await response.json()
-                    if "choices" not in data or not data["choices"]:
-                        self.logger.error("No choices in API response")
-                        raise Exception("No choices in API response")
-                    content = data["choices"][0]["message"]["content"].strip()
-                    self.logger.info(f"OpenRouter response: {content}")
-                    if content.startswith("```json"):
-                        content = content[7:]
-                    if content.startswith("```"):
-                        content = content[3:]
-                    if content.endswith("```"):
-                        content = content[:-3]
-                    content = content.strip()
-                    obj = json.loads(content)
-                    self.logger.info(f"Parsed JSON: {obj}")
-                    if "reminders" in obj and isinstance(obj["reminders"], list):
-                        validated_reminders = []
-                        for reminder in obj["reminders"]:
-                            if self._validate_parsed_object(reminder):
-                                calculated_time = self._calculate_reminder_time(reminder, user_calendar, timezone)
-                                if calculated_time.startswith("PAST_DATE_ERROR"):
-                                    parts = calculated_time.split("|")
-                                    detected_date = parts[1] if len(parts) > 1 else ""
-                                    current_date = parts[2] if len(parts) > 2 else ""
-                                    return {"reminders": [], "message": "past_date_error", "detected_date": detected_date, "current_date": current_date}
-                                reminder["time"] = calculated_time
-                                reminder.setdefault("timezone", timezone)
-                                reminder["content"] = str(reminder["content"])[:40]
-                                validated_reminders.append(reminder)
-                        if validated_reminders:
-                            return {"reminders": validated_reminders, "message": None}
-                        else:
-                            self.logger.warning("No valid reminders found in AI response")
-                            return {"reminders": [], "message": "ai_error"}
-                    elif self._validate_parsed_object(obj):
-                        calculated_time = self._calculate_reminder_time(obj, user_calendar, timezone)
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a multilingual reminder pattern parser that outputs JSON.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+            
+            content = await self._make_api_call(messages, max_tokens=400, temperature=0.1)
+            if not content:
+                raise Exception("API call failed")
+                
+            self.logger.info(f"OpenRouter response: {content}")
+            obj = json.loads(content)
+            self.logger.info(f"Parsed JSON: {obj}")
+            if "reminders" in obj and isinstance(obj["reminders"], list):
+                validated_reminders = []
+                for reminder in obj["reminders"]:
+                    if self._validate_parsed_object(reminder):
+                        calculated_time = self._calculate_reminder_time(reminder, user_calendar, timezone)
                         if calculated_time.startswith("PAST_DATE_ERROR"):
                             parts = calculated_time.split("|")
                             detected_date = parts[1] if len(parts) > 1 else ""
                             current_date = parts[2] if len(parts) > 2 else ""
                             return {"reminders": [], "message": "past_date_error", "detected_date": detected_date, "current_date": current_date}
-                        obj["time"] = calculated_time
-                        obj.setdefault("timezone", timezone)
-                        obj["content"] = str(obj["content"])[:40]
-                        return {"reminders": [obj], "message": None}
-                    else:
-                        self.logger.warning(f"Invalid parsed object: {obj}")
-                        return {"reminders": [], "message": "ai_error"}
+                        reminder["time"] = calculated_time
+                        reminder.setdefault("timezone", timezone)
+                        reminder["content"] = str(reminder["content"])[:40]
+                        validated_reminders.append(reminder)
+                if validated_reminders:
+                    return {"reminders": validated_reminders, "message": None}
+                else:
+                    self.logger.warning("No valid reminders found in AI response")
+                    return {"reminders": [], "message": "ai_error"}
+            elif self._validate_parsed_object(obj):
+                calculated_time = self._calculate_reminder_time(obj, user_calendar, timezone)
+                if calculated_time.startswith("PAST_DATE_ERROR"):
+                    parts = calculated_time.split("|")
+                    detected_date = parts[1] if len(parts) > 1 else ""
+                    current_date = parts[2] if len(parts) > 2 else ""
+                    return {"reminders": [], "message": "past_date_error", "detected_date": detected_date, "current_date": current_date}
+                obj["time"] = calculated_time
+                obj.setdefault("timezone", timezone)
+                obj["content"] = str(obj["content"])[:40]
+                return {"reminders": [obj], "message": None}
+            else:
+                self.logger.warning(f"Invalid parsed object: {obj}")
+                return {"reminders": [], "message": "ai_error"}
         except (aiohttp.ClientError, ValueError, KeyError, json.JSONDecodeError, asyncio.TimeoutError) as e:
             self.logger.error(f"AI parsing error: {e}")
             self.logger.error(f"Error type: {type(e).__name__}")
@@ -236,6 +223,11 @@ JSON only, no markdown.
             next_occurrence = next_occurrence.replace(hour=target_hour, minute=target_minute)
             return next_occurrence.strftime("%Y-%m-%d %H:%M")
         elif repeat_type == "interval":
+            if time_hour is not None:
+                start_time = now.replace(hour=target_hour, minute=target_minute)
+                if start_time <= now:
+                    start_time += datetime.timedelta(days=1)
+                return start_time.strftime("%Y-%m-%d %H:%M")
             value = repeat_data.get("value", 0)
             unit = repeat_data.get("unit", "minutes")
             if unit == "minutes":
@@ -291,127 +283,61 @@ JSON only, no markdown.
             obj["repeat"] = json.dumps(obj["repeat"])
     async def parse_edit(self, current_reminder: dict, edit_text: str, timezone: str) -> Dict[str, Any]:
         try:
-            headers = {
-                "Authorization": f"Bearer {self.key}",
-                "Content-Type": "application/json",
-            }
-            prompt = f"""
-EDIT REMINDER ANALYSIS:
-Current reminder:
-- Content: "{current_reminder['content']}"
-- Time: "{current_reminder['time']}"
-- Category: "{current_reminder['category']}"
-- Repeat: "{current_reminder['repeat']}"
-User edit request: "{edit_text}"
-TASK: Determine what user wants to change and output the new reminder.
-RULES:
-1) If user only mentions new content (no time/schedule words), keep original time/repeat
-2) If user mentions time/schedule, update accordingly
-3) Extract clean content without instruction words
-4) Maintain original language style
-OUTPUT JSON:
-{{
-  "content": "cleaned_content_text",
-  "time": "YYYY-MM-DD HH:mm",
-  "category": "category",
-  "repeat": {{"type": "...", "value": null, "unit": null}},
-  "changed": ["content"] or ["content", "time", "repeat"]
-}}
-Return ONLY raw JSON - no markdown, no explanations.
-            """
-            async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
-                async with session.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": "gpt-4o",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are an edit analyzer that outputs JSON.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        "max_tokens": 300,
-                        "temperature": 0.1
-                    },
-                ) as response:
-                    if response.status != 200:
-                        self.logger.error(f"Edit API request failed with status {response.status}")
-                        return None
-                    data = await response.json()
-                    if "choices" not in data or not data["choices"]:
-                        self.logger.error("No choices in edit API response")
-                        return None
-                    content = data["choices"][0]["message"]["content"].strip()
-                    if content.startswith("```json"):
-                        content = content[7:]
-                    if content.startswith("```"):
-                        content = content[3:]
-                    if content.endswith("```"):
-                        content = content[:-3]
-                    content = content.strip()
-                    obj = json.loads(content)
-                    self.logger.info(f"Edit analysis result: {obj}")
-                    self._normalize_repeat_field(obj)
-                    return obj
+            prompt = self.prompt_manager.get_prompt_with_params("edit_reminder", 
+                content=current_reminder['content'],
+                time=current_reminder['time'],
+                category=current_reminder['category'],
+                repeat=current_reminder['repeat'],
+                edit_text=edit_text
+            )
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are an edit analyzer that outputs JSON.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+            
+            content = await self._make_api_call(messages, max_tokens=300, temperature=0.1)
+            if not content:
+                return None
+            obj = json.loads(content)
+            self.logger.info(f"Edit analysis result: {obj}")
+            self._normalize_repeat_field(obj)
+            return obj
         except Exception as e:
             self.logger.error(f"Edit parsing error: {e}")
             return None
     async def parse_timezone(self, prompt: str) -> Optional[tuple]:
         try:
-            async with aiohttp.ClientSession(timeout=self.session_timeout) as session:
-                headers = {
-                    "Authorization": f"Bearer {self.key}",
-                    "Content-Type": "application/json",
-                }
-                async with session.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json={
-                        "model": "gpt-4o",
-                        "messages": [
-                            {
-                                "role": "system",
-                                "content": "You are a timezone detector that outputs JSON.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        "max_tokens": 100,
-                        "temperature": 0.1
-                    },
-                ) as response:
-                    if response.status != 200:
-                        self.logger.error(f"Timezone API request failed with status {response.status}")
-                        return None
-                    data = await response.json()
-                    if "choices" not in data or not data["choices"]:
-                        self.logger.error("No choices in timezone API response")
-                        return None
-                    content = data["choices"][0]["message"]["content"].strip()
-                    self.logger.info(f"Raw timezone response: {content[:200]}")
-                    if content.lower() == "null" or not content:
-                        self.logger.info("AI returned null or empty response")
-                        return None
-                    if content.startswith("```json"):
-                        content = content[7:]
-                    if content.startswith("```"):
-                        content = content[3:]
-                    if content.endswith("```"):
-                        content = content[:-3]
-                    content = content.strip()
-                    if not content:
-                        self.logger.info("Content empty after cleanup")
-                        return None
-                    self.logger.info(f"Cleaned timezone content: {content}")
-                    obj = json.loads(content)
-                    if not isinstance(obj, dict) or "city" not in obj or "timezone" not in obj:
-                        return None
-                    city = str(obj["city"])[:50]
-                    timezone = str(obj["timezone"])
-                    if not self._validate_timezone(timezone):
-                        return None
-                    return (city, timezone)
+            messages = [
+                {
+                    "role": "system",
+                    "content": "You are a timezone detector that outputs JSON.",
+                },
+                {"role": "user", "content": prompt},
+            ]
+            
+            content = await self._make_api_call(messages, max_tokens=100, temperature=0.1)
+            if not content:
+                return None
+                
+            self.logger.info(f"Raw timezone response: {content[:200]}")
+            if content.lower() == "null" or not content:
+                self.logger.info("AI returned null or empty response")
+                return None
+            if not content:
+                self.logger.info("Content empty after cleanup")
+                return None
+            self.logger.info(f"Cleaned timezone content: {content}")
+            obj = json.loads(content)
+            if not isinstance(obj, dict) or "city" not in obj or "timezone" not in obj:
+                return None
+            city = str(obj["city"])[:50]
+            timezone = str(obj["timezone"])
+            if not self._validate_timezone(timezone):
+                return None
+            return (city, timezone)
         except (aiohttp.ClientError, ValueError, KeyError, json.JSONDecodeError, asyncio.TimeoutError) as e:
             self.logger.error(f"Timezone parsing error: {e}")
             return None

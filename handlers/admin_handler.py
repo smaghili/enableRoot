@@ -180,8 +180,6 @@ class AdminHandler:
 
     async def handle_cancel_operation(self, message: Message, lang: str):
         user_id = message.from_user.id
-        
-        # Clear all possible waiting states
         self.waiting_for_broadcast.discard(user_id)
         self.waiting_for_channel.discard(user_id)
         self.waiting_for_private_user_id.discard(user_id)
@@ -189,7 +187,6 @@ class AdminHandler:
             del self.waiting_for_private_message[user_id]
         self.waiting_for_delete_user.discard(user_id)
         self.in_forced_join_menu.discard(user_id)
-        
         await self.show_admin_panel(message)
 
     async def handle_forced_join_toggle(self, message: Message, lang: str):

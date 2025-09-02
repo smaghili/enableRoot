@@ -1,0 +1,26 @@
+Extract reminder patterns from user text. Support ALL languages.
+Inputs: text="{text}"
+OUTPUT: Strict JSON only:
+{{
+  "reminders": [
+    {{
+      "category": "medicine|birthday|appointment|work|exercise|prayer|shopping|call|study|installment|bill|general",
+      "content": "clean title (≤40 chars)",
+      "time_hour": number|null,
+      "relative_days": number|null,
+      "repeat": {{ "type": "none|daily|weekly|monthly|yearly|interval", "value": number|null, "unit": "minutes|hours|days|weeks|null", "day": number|null, "weekday": "monday|tuesday|wednesday|thursday|friday|saturday|sunday"|null }}
+    }}
+  ]
+}}
+RULES:
+1. Monthly: "5th every month" / "5 هر ماه" / "5 cada mes" → {{"type": "monthly", "day": 5}}
+2. Interval: "every 8 hours" / "هر 8 ساعت" / "cada 8 horas" → {{"type": "interval", "value": 8, "unit": "hours"}}
+3. Daily: "every day" / "هر روز" / "todos los días" → {{"type": "daily"}}
+4. Weekly single: "every Friday" / "هر جمعه" / "cada viernes" → {{"type": "weekly", "weekday": "friday"}}
+5. Weekly multiple: "Monday and Wednesday" / "دوشنبه و چهارشنبه" → CREATE 2 SEPARATE reminders, each with {{"type": "weekly", "weekday": "monday"}} and {{"type": "weekly", "weekday": "wednesday"}}
+6. Time extraction: "at 7" / "ساعت 7" / "a las 7" → "time_hour": 7
+7. Relative dates: "فردا/tomorrow" → "relative_days": 1, "پسفردا" → 2, "سه روز دیگه" → 3, "پریروز" → -2, "دیروز" → -1, "امروز" → 0
+8. Content: Remove time/schedule words, keep action/object only
+9. Category: Detect from content
+CRITICAL: If text mentions multiple days (and/or), create separate reminders for each day.
+JSON only, no markdown.
