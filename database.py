@@ -94,6 +94,30 @@ class Database:
                     (user_id, "birthday_pre_three", content,
                      three_days_before_utc.strftime("%Y-%m-%d %H:%M"), timezone, "yearly", status),
                 )
+            return self.conn.lastrowid
+
+    def get_user_details(self, user_id):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("""
+                select count(*) from reminders 
+                where user_id = ? and status != 'cancelled'
+            """, (user_id,))
+            reminder_count = cur.fetchone()[0]
+            cur.close()
+            return reminder_count
+
+    def get_reminder_for_log(self, reminder_id):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("""
+                select id, user_id, category, content, time, timezone, repeat, status
+                from reminders
+                where id = ?
+            """, (reminder_id,))
+            row = cur.fetchone()
+            cur.close()
+            return row
 
     def list(self, user_id, status="active"):
         with self.lock:
@@ -231,36 +255,95 @@ class Database:
                 from reminders
             """)
             basic_stats = cur.fetchone()
-            
+            admin_count = 1
             cur.execute("""
-                select category, count(*) as count
-                from reminders 
-                where status != 'cancelled'
-                group by category 
-                order by count desc 
-                limit 1
+                select distinct category from reminders 
+                where status != 'cancelled' and category != 'birthday_pre_week' and category != 'birthday_pre_three'
+                order by category
             """)
-            top_category = cur.fetchone()
-            
+            categories = [row[0] for row in cur.fetchall()]
+            today = datetime.datetime.now().strftime("%Y-%m-%d")
+            week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
+            month_ago = (datetime.datetime.now() - datetime.timedelta(days=30)).strftime("%Y-%m-%d")
             cur.execute("""
-                select user_id, count(*) as count
-                from reminders 
-                where status != 'cancelled'
-                group by user_id 
-                order by count desc 
-                limit 1
+                select count(*) from reminders 
+                where category = 'birthday' 
+                and date(time) = date(?) 
+                and status != 'cancelled'
+            """, (today,))
+            birthdays_today = cur.fetchone()[0]
+            cur.execute("""
+                select count(*) from reminders 
+                where category = 'birthday' 
+                and date(time) >= date(?) 
+                and date(time) <= date(?) 
+                and status != 'cancelled'
+            """, (week_ago, today))
+            birthdays_week = cur.fetchone()[0]
+            cur.execute("""
+                select count(*) from reminders 
+                where category = 'birthday' 
+                and date(time) >= date(?) 
+                and date(time) <= date(?) 
+                and status != 'cancelled'
+            """, (month_ago, today))
+            birthdays_month = cur.fetchone()[0]
+            cur.execute("""
+                select count(*) from reminders 
+                where category = 'birthday' 
+                and status != 'cancelled'
             """)
-            top_user = cur.fetchone()
-            
+            total_birthdays = cur.fetchone()[0]
+            category_stats = {}
+            for category in categories:
+                if category == 'birthday':
+                    continue
+                cur.execute("""
+                    select count(*) from reminders 
+                    where category = ? 
+                    and date(time) = date(?) 
+                    and status != 'cancelled'
+                """, (category, today))
+                today_count = cur.fetchone()[0]
+                cur.execute("""
+                    select count(*) from reminders 
+                    where category = ? 
+                    and date(time) >= date(?) 
+                    and date(time) <= date(?) 
+                    and status != 'cancelled'
+                """, (category, week_ago, today))
+                week_count = cur.fetchone()[0]
+                cur.execute("""
+                    select count(*) from reminders 
+                    where category = ? 
+                    and date(time) >= date(?) 
+                    and date(time) <= date(?) 
+                    and status != 'cancelled'
+                """, (category, month_ago, today))
+                month_count = cur.fetchone()[0]
+                cur.execute("""
+                    select count(*) from reminders 
+                    where category = ? 
+                    and status != 'cancelled'
+                """, (category,))
+                total_count = cur.fetchone()[0]
+                category_stats[category] = {
+                    'today': today_count,
+                    'week': week_count,
+                    'month': month_count,
+                    'total': total_count
+                }
             cur.close()
             return {
                 'total_users': basic_stats[0],
                 'total_reminders': basic_stats[1], 
                 'active_reminders': basic_stats[2],
-                'top_category': top_category[0] if top_category else None,
-                'top_category_count': top_category[1] if top_category else 0,
-                'top_user_id': top_user[0] if top_user else None,
-                'top_user_count': top_user[1] if top_user else 0
+                'admin_count': admin_count,
+                'birthdays_today': birthdays_today,
+                'birthdays_week': birthdays_week,
+                'birthdays_month': birthdays_month,
+                'total_birthdays': total_birthdays,
+                'category_stats': category_stats
             }
 
     def close(self):

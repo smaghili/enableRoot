@@ -17,6 +17,7 @@
     "max_reminders_per_user": 100,
     "log_level": "INFO",
     "admin_ids": [123456789],
+    "log_channel_id": null,
     "forced_join": {
       "enabled": false,
       "channels": []

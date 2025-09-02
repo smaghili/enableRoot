@@ -217,6 +217,7 @@ class ServiceProvider:
         from reminder_scheduler import ReminderScheduler
         from repeat_handler import RepeatHandler
         from notification_strategies import NotificationStrategyFactory, NotificationContext
+        from utils.logger import LogManager
         
         # Configuration
         config_manager = ConfigManager()
@@ -245,6 +246,9 @@ class ServiceProvider:
         )
         
         self.container.register_singleton(RepeatHandler, RepeatHandler)
+        
+        # Logging service
+        self.container.register_singleton(LogManager, LogManager)
         
         # Notification services
         self.container.register_factory(

@@ -13,7 +13,7 @@ except ImportError:
     jdatetime = None
 logger = logging.getLogger(__name__)
 class ReminderCallbackHandler(IMessageHandler):
-    def __init__(self, storage, db, ai, repeat_handler, locales, message_handler, session, config):
+    def __init__(self, storage, db, ai, repeat_handler, locales, message_handler, session, config, log_manager=None):
         self.storage = storage
         self.db = db
         self.ai = ai
@@ -22,6 +22,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.message_handler = message_handler
         self.session = session
         self.config = config
+        self.log_manager = log_manager
         self.user_request_times = {}
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -377,7 +378,7 @@ class ReminderCallbackHandler(IMessageHandler):
                     }
                     corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
                     reminder_data["time"] = corrected_time
-                    self.db.add(
+                    reminder_id = self.db.add(
                         user_id,
                         reminder_data["category"],
                         reminder_data["content"],
@@ -386,6 +387,12 @@ class ReminderCallbackHandler(IMessageHandler):
                         reminder_data["repeat"]
                     )
                     self.storage.add_reminder(user_id, reminder_data)
+                    if self.log_manager:
+                        await self.log_manager.send_reminder_log(
+                            reminder_id, user_id, 
+                            reminder_data["category"], 
+                            reminder_data["content"]
+                        )
                     created_count += 1
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "multiple_reminders_saved").format(count=created_count))
@@ -400,7 +407,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 }
                 corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
                 reminder_data["time"] = corrected_time
-                self.db.add(
+                reminder_id = self.db.add(
                     user_id,
                     reminder_data["category"],
                     reminder_data["content"],
@@ -409,6 +416,12 @@ class ReminderCallbackHandler(IMessageHandler):
                     reminder_data["repeat"]
                 )
                 self.storage.add_reminder(user_id, reminder_data)
+                if self.log_manager:
+                    await self.log_manager.send_reminder_log(
+                        reminder_id, user_id, 
+                        reminder_data["category"], 
+                        reminder_data["content"]
+                    )
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "reminder_saved"))
         else:

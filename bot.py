@@ -14,6 +14,7 @@ from handlers.callback_handlers import ReminderCallbackHandler
 from handlers.admin_handler import AdminHandler
 from utils.date_converter import DateConverter
 from utils.security_utils import create_secure_directory, secure_file_permissions
+from utils.logger import LogManager
 
 import json
 import os
@@ -53,8 +54,9 @@ if os.path.exists(config.database_path):
 def load_locales():
     l = {}
     for f in os.listdir(os.path.join(base, "localization")):
-        with open(os.path.join(base, "localization", f)) as d:
-            l[f.split(".")[0]] = json.load(d)
+        if f.endswith(".json"):
+            with open(os.path.join(base, "localization", f)) as d:
+                l[f.split(".")[0]] = json.load(d)
     return l
 
 locales = load_locales()
@@ -82,9 +84,10 @@ class UserSession:
             self.editing_reminders.pop(uid, None)
 
 session = UserSession()
+log_manager = LogManager(bot, config, storage)
 
 message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config)
-callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config)
+callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config, log_manager)
 admin_handler = AdminHandler(storage, db, bot, config, locales)
 
 @dp.message(Command("start"))

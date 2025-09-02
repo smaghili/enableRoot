@@ -20,6 +20,7 @@ class AdminHandler:
         self.waiting_for_limit = set()
         self.in_forced_join_menu = set()
         self.waiting_for_delete_user = set()
+        self.waiting_for_log_channel = set()
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -47,6 +48,7 @@ class AdminHandler:
                 [KeyboardButton(text=self.t(lang, "admin_general_stats")), KeyboardButton(text=self.t(lang, "admin_delete_user"))],
                 [KeyboardButton(text=self.t(lang, "admin_broadcast")), KeyboardButton(text=self.t(lang, "admin_private_message"))],
                 [KeyboardButton(text=self.t(lang, "admin_user_limit")), KeyboardButton(text=self.t(lang, "admin_forced_join"))],
+                [KeyboardButton(text=self.t(lang, "admin_log_channel"))],
                 [KeyboardButton(text=self.t(lang, "back"))]
             ]
             
@@ -83,6 +85,8 @@ class AdminHandler:
                 await self.handle_forced_join_menu(message, lang)
             elif button_text == self.t(lang, "admin_delete_user"):
                 await self.handle_delete_user_start(message, lang)
+            elif button_text == self.t(lang, "admin_log_channel"):
+                await self.handle_log_channel_setup(message, lang)
             elif button_text == self.t(lang, "cancel_operation"):
                 await self.handle_cancel_operation(message, lang)
             elif button_text == self.t(lang, "back"):
@@ -125,8 +129,76 @@ class AdminHandler:
 
     async def handle_general_stats(self, message: Message, lang: str):
         stats = self.db.get_admin_stats()
-        stats_text = self.t(lang, "admin_stats_report").format(**stats)
+        try:
+            with open("config/config.json", "r") as f:
+                config_data = json.load(f)
+            stats['admin_count'] = len(config_data["bot"]["admin_ids"])
+        except Exception:
+            stats['admin_count'] = 1
+        
+        user_id = message.from_user.id
+        user_reminder_count = self.db.get_user_details(user_id)
+        
+        stats_text = f"""📊 آمار:
+
+👤 تعداد کاربران ربات : {stats['total_users']} نفر
+🖍 تعداد ادمین های ربات :  {stats['admin_count']} نفر
+
+👤 کاربر درخواست کننده:
+🆔 ایدی عددی: {user_id}
+👤 نام: {message.from_user.first_name or 'نامشخص'}
+🆔 یوزرنیم: @{message.from_user.username or 'نامشخص'}
+📝 تعداد یادآوری های ثبت شده: {user_reminder_count} عدد
+
+🎂  تولدها
+تعداد تولدهای ثبت شده امروز : {stats['birthdays_today']} 
+تعداد تولدهای یک هفته اخیر : {stats['birthdays_week']} 
+تعداد تولدهای  یک ماه اخیر : {stats['birthdays_month']} 
+تعداد کل تولدهای ثبت شده تا امروز  : {stats['total_birthdays']} 
+
+📅 سایر یادآوری ها"""
+        for category, cat_stats in stats['category_stats'].items():
+            category_display = self.get_category_display_name(category, lang)
+            stats_text += f"""
+
+{category_display}
+تعداد {category_display} ثبت شده امروز : {cat_stats['today']} 
+تعداد {category_display} یک هفته اخیر : {cat_stats['week']} 
+تعداد {category_display} یک ماه اخیر : {cat_stats['month']} 
+تعداد کل {category_display} ثبت شده تا امروز  : {cat_stats['total']} """
         await message.answer(stats_text)
+    
+    def get_category_display_name(self, category: str, lang: str) -> str:
+        category_mapping = {
+            'medicine': '💊 دارو',
+            'appointment': '📅 قرار ملاقات',
+            'work': '💼 کار',
+            'exercise': '🏃‍♂️ ورزش',
+            'prayer': '🕌 نماز',
+            'shopping': '🛒 خرید',
+            'call': '📞 تماس',
+            'study': '📚 درس',
+            'installment': '💳 قسط',
+            'bill': '💰 قبض',
+            'general': '⏰ عمومی'
+        }
+        if lang == 'fa':
+            return category_mapping.get(category, category)
+        else:
+            english_names = {
+                'medicine': '💊 Medicine',
+                'appointment': '📅 Appointment',
+                'work': '💼 Work',
+                'exercise': '🏃‍♂️ Exercise',
+                'prayer': '🕌 Prayer',
+                'shopping': '🛒 Shopping',
+                'call': '📞 Call',
+                'study': '📚 Study',
+                'installment': '💳 Installment',
+                'bill': '💰 Bill',
+                'general': '⏰ General'
+            }
+            return english_names.get(category, category)
 
     async def handle_user_limit(self, message: Message, lang: str):
         current_limit = self.get_current_limit_from_config()
@@ -186,6 +258,7 @@ class AdminHandler:
         if user_id in self.waiting_for_private_message:
             del self.waiting_for_private_message[user_id]
         self.waiting_for_delete_user.discard(user_id)
+        self.waiting_for_log_channel.discard(user_id)
         self.in_forced_join_menu.discard(user_id)
         await self.show_admin_panel(message)
 
@@ -257,6 +330,8 @@ class AdminHandler:
                 await self.process_limit_change(message, lang)
             elif user_id in self.waiting_for_delete_user:
                 await self.process_delete_user(message, lang)
+            elif user_id in self.waiting_for_log_channel:
+                await self.process_log_channel(message, lang)
                 
         except Exception as e:
             logger.error(f"Error in handle_admin_message: {e}")
@@ -265,7 +340,7 @@ class AdminHandler:
         admin_buttons = [
             "admin_add_admin", "admin_remove_admin", "admin_general_stats", "admin_user_limit",
             "admin_broadcast", "admin_private_message", "admin_forced_join", "admin_delete_user",
-            "back", "cancel_operation"
+            "admin_log_channel", "back", "cancel_operation"
         ]
         return any(message_text == self.t(lang, btn) for btn in admin_buttons)
 
@@ -780,4 +855,49 @@ class AdminHandler:
         finally:
             self.waiting_for_delete_user.discard(user_id)
             await self.show_admin_panel(message)
+
+    async def handle_log_channel_setup(self, message: Message, lang: str):
+        current_log_channel = self.get_current_log_channel()
+        if current_log_channel:
+            status_text = self.t(lang, "admin_log_channel_current").format(channel=current_log_channel)
+        else:
+            status_text = self.t(lang, "admin_log_channel_not_set")
+        
+        self.waiting_for_log_channel.add(message.from_user.id)
+        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        await message.answer(self.t(lang, "admin_log_channel_setup").format(status=status_text), reply_markup=kb)
+
+    def get_current_log_channel(self):
+        try:
+            with open("config/config.json", "r") as f:
+                config_data = json.load(f)
+            return config_data["bot"].get("log_channel_id")
+        except Exception:
+            return None
+
+    async def process_log_channel(self, message: Message, lang: str):
+        user_id = message.from_user.id
+        try:
+            log_channel_id = int(message.text.strip())
+            
+            config_data = {}
+            with open("config/config.json", "r") as f:
+                config_data = json.load(f)
+            
+            config_data["bot"]["log_channel_id"] = log_channel_id
+            
+            with open("config/config.json", "w") as f:
+                json.dump(config_data, f, indent=2)
+            
+            await message.answer(self.t(lang, "admin_log_channel_set").format(channel=log_channel_id))
+            await self.show_admin_panel(message)
+            
+        except ValueError:
+            await message.answer(self.t(lang, "admin_invalid_id"))
+        except Exception as e:
+            logger.error(f"Error setting log channel: {e}")
+            await message.answer(self.t(lang, "admin_error"))
+        finally:
+            self.waiting_for_log_channel.discard(user_id)
 
