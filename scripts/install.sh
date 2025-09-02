@@ -180,7 +180,7 @@ create_config_file() {
 
 
 create_directories() {
-    print_status "Creating data directories..."
+    print_status "Creating data directories...."
     mkdir -p ../data/users
     chmod 755 ../data
     chmod 755 ../data/users
