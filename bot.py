@@ -15,6 +15,7 @@ from handlers.admin import AdminHandler
 from utils.date_converter import DateConverter
 from utils.security_utils import create_secure_directory, secure_file_permissions
 from utils.logger import LogManager
+from utils.menu_factory import MenuFactory
 
 import json
 import os
@@ -111,12 +112,7 @@ async def start_message(message: Message):
     
     try:
         if is_new_user:
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🇮🇷 فارسی", callback_data="setup_lang_fa")],
-                [InlineKeyboardButton(text="🇺🇸 English", callback_data="setup_lang_en")],
-                [InlineKeyboardButton(text="🇸🇦 العربية", callback_data="setup_lang_ar")],
-                [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="setup_lang_ru")]
-            ])
+            kb = MenuFactory.create_language_selection_keyboard()
             await message.answer(
                 "🎉 Welcome to Smart Reminder Bot!\n"
                 "🌍 Please choose your language:",
@@ -126,17 +122,7 @@ async def start_message(message: Message):
             lang = data["settings"]["language"]
             await message.answer(message_handler.t(lang, "start"))
             
-            keyboard = [
-                [KeyboardButton(text=message_handler.t(lang, "btn_new"))],
-                [KeyboardButton(text=message_handler.t(lang, "btn_delete")), KeyboardButton(text=message_handler.t(lang, "btn_edit"))],
-                [KeyboardButton(text=message_handler.t(lang, "btn_list"))],
-                [KeyboardButton(text=message_handler.t(lang, "btn_settings")), KeyboardButton(text=message_handler.t(lang, "btn_stats"))]
-            ]
-            
-            if admin_handler.is_admin(user_id):
-                keyboard.append([KeyboardButton(text=message_handler.t(lang, "btn_admin"))])
-            
-            kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+            kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
             await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
         storage.save(user_id, data)
     except Exception as e:
@@ -293,17 +279,7 @@ async def show_menu(message: Message):
         logger.error(f"Error in show_menu for user {user_id}: {e}")
         return
     
-    keyboard = [
-        [KeyboardButton(text=message_handler.t(lang, "btn_new"))],
-        [KeyboardButton(text=message_handler.t(lang, "btn_delete")), KeyboardButton(text=message_handler.t(lang, "btn_edit"))],
-        [KeyboardButton(text=message_handler.t(lang, "btn_list"))],
-        [KeyboardButton(text=message_handler.t(lang, "btn_settings")), KeyboardButton(text=message_handler.t(lang, "btn_stats"))]
-    ]
-    
-    if admin_handler.is_admin(user_id):
-        keyboard.append([KeyboardButton(text=message_handler.t(lang, "btn_admin"))])
-    
-    kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+    kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
     await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
 
 @dp.message(F.text)
@@ -359,11 +335,7 @@ async def handle_menu_buttons(message: Message):
     elif action == "new":
         await message.answer(message_handler.t(lang, "new_reminder_text"))
     elif action == "settings":
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=message_handler.t(lang, "change_language"), callback_data="change_lang")],
-            [InlineKeyboardButton(text=message_handler.t(lang, "change_timezone"), callback_data="change_tz")],
-            [InlineKeyboardButton(text=message_handler.t(lang, "change_calendar"), callback_data="change_calendar")]
-        ])
+        kb = MenuFactory.create_settings_keyboard(lang, message_handler.t)
         await message.answer(message_handler.t(lang, "settings"), reply_markup=kb)
     elif action == "stats":
         stats = db.get_stats(user_id)
@@ -448,17 +420,7 @@ async def handle_check_membership(callback_query: CallbackQuery):
         await callback_query.message.delete()
         await callback_query.message.answer(message_handler.t(lang, "start"))
         
-        keyboard = [
-            [KeyboardButton(text=message_handler.t(lang, "btn_new"))],
-            [KeyboardButton(text=message_handler.t(lang, "btn_delete")), KeyboardButton(text=message_handler.t(lang, "btn_edit"))],
-            [KeyboardButton(text=message_handler.t(lang, "btn_list"))],
-            [KeyboardButton(text=message_handler.t(lang, "btn_settings")), KeyboardButton(text=message_handler.t(lang, "btn_stats"))]
-        ]
-        
-        if admin_handler.is_admin(user_id):
-            keyboard.append([KeyboardButton(text=message_handler.t(lang, "btn_admin"))])
-        
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
         await callback_query.message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
         await callback_query.answer()
     else:

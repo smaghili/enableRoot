@@ -8,6 +8,7 @@ import json
 from config.config import Config
 from config.interfaces import IMessageHandler
 from utils.date_converter import DateConverter
+from utils.menu_factory import MenuFactory
 
 logger = logging.getLogger(__name__)
 
@@ -169,10 +170,7 @@ class ReminderMessageHandler(IMessageHandler):
                 self.waiting_for_city[user_id] = False
                 return
             city, timezone = timezone_info
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=self.t(lang, "yes"), callback_data=f"confirm_tz_{timezone}")],
-                [InlineKeyboardButton(text=self.t(lang, "no"), callback_data="cancel_tz")]
-            ])
+            kb = MenuFactory.create_timezone_confirmation_keyboard(lang, self.t, timezone)
             user_data = self.storage.load(user_id)
             if user_id in self.waiting_for_city and not user_data["settings"].get("setup_complete", False):
                 confirmation_text = self.t(lang, "setup_timezone_confirmation").format(city=city, timezone=timezone)
@@ -228,11 +226,7 @@ class ReminderMessageHandler(IMessageHandler):
             repeat_pattern = self.repeat_handler.from_json(repeat_value)
             repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
             
-            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=self.t(lang, "confirm"), callback_data="confirm")],
-                [InlineKeyboardButton(text=self.t(lang, "cancel"), callback_data="cancel")]
-            ])
+            kb = MenuFactory.create_confirm_cancel_keyboard(lang, self.t)
             
             calendar_type = data["settings"].get("calendar", "miladi")
             display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", current_reminder["time"]), calendar_type)
@@ -258,13 +252,7 @@ class ReminderMessageHandler(IMessageHandler):
             self.session.editing_reminders.pop(user_id, None)
             if user_id in self.session.pending:
                 self.session.pending.pop(user_id)
-            from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-            kb = ReplyKeyboardMarkup(keyboard=[
-                [KeyboardButton(text=self.t(lang, "btn_new"))],
-                [KeyboardButton(text=self.t(lang, "btn_delete")), KeyboardButton(text=self.t(lang, "btn_edit"))],
-                [KeyboardButton(text=self.t(lang, "btn_list"))],
-                [KeyboardButton(text=self.t(lang, "btn_settings")), KeyboardButton(text=self.t(lang, "btn_stats"))]
-            ], resize_keyboard=True)
+            kb = MenuFactory.create_main_menu(lang, self.t)
             
             await message.answer(self.t(lang, "edit_cancelled"), reply_markup=kb)
             
@@ -310,8 +298,5 @@ class ReminderMessageHandler(IMessageHandler):
             display_time = DateConverter.convert_to_user_calendar(parsed['time'], calendar_type)
             summary_prefix = self.t(lang, 'summary')
             summary = f"{summary_prefix}: {parsed['content']} @ {display_time} ({category_text}) - {repeat_text}"
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=self.t(lang, "confirm"), callback_data="confirm")],
-            [InlineKeyboardButton(text=self.t(lang, "cancel"), callback_data="cancel")]
-        ])
+        kb = MenuFactory.create_confirm_cancel_keyboard(lang, self.t)
         await message.answer(summary, reply_markup=kb)

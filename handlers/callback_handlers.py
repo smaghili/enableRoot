@@ -7,6 +7,7 @@ import json
 from config.config import Config
 from config.interfaces import IMessageHandler
 from utils.date_converter import DateConverter
+from utils.menu_factory import MenuFactory
 try:
     import jdatetime
 except ImportError:
@@ -143,12 +144,7 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         await callback_query.message.edit_text(self.t(lang_code, "saved"))
         await callback_query.answer()
-        kb = ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text=self.t(lang_code, "btn_new"))],
-            [KeyboardButton(text=self.t(lang_code, "btn_delete")), KeyboardButton(text=self.t(lang_code, "btn_edit"))],
-            [KeyboardButton(text=self.t(lang_code, "btn_list"))],
-            [KeyboardButton(text=self.t(lang_code, "btn_settings")), KeyboardButton(text=self.t(lang_code, "btn_stats"))]
-        ], resize_keyboard=True)
+        kb = MenuFactory.create_main_menu(lang_code, self.t)
         await callback_query.message.answer(self.t(lang_code, "menu"), reply_markup=kb)
     async def handle_change_language(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
@@ -346,13 +342,7 @@ class ReminderCallbackHandler(IMessageHandler):
                     repeat_value = json.dumps(repeat_value)
                 repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-                from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-                kb = ReplyKeyboardMarkup(keyboard=[
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_new"))],
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_delete")), KeyboardButton(text=self.message_handler.t(lang, "btn_edit"))],
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
-                    [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))]
-                ], resize_keyboard=True)
+                kb = MenuFactory.create_main_menu(lang, self.message_handler.t)
                 calendar_type = data["settings"].get("calendar", "miladi")
                 display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
                 await callback_query.message.delete()

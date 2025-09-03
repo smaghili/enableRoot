@@ -1,6 +1,7 @@
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import logging
 import json
+from utils.menu_factory import MenuFactory
 from .admin_user_manager import AdminUserManager
 from .admin_stats_manager import AdminStatsManager
 from .admin_broadcast_manager import AdminBroadcastManager
@@ -49,16 +50,7 @@ class AdminHandler:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
             
-            keyboard = [
-                [KeyboardButton(text=self.t(lang, "admin_add_admin")), KeyboardButton(text=self.t(lang, "admin_remove_admin"))],
-                [KeyboardButton(text=self.t(lang, "admin_general_stats")), KeyboardButton(text=self.t(lang, "admin_delete_user"))],
-                [KeyboardButton(text=self.t(lang, "admin_broadcast")), KeyboardButton(text=self.t(lang, "admin_private_message"))],
-                [KeyboardButton(text=self.t(lang, "admin_user_limit")), KeyboardButton(text=self.t(lang, "admin_forced_join"))],
-                [KeyboardButton(text=self.t(lang, "admin_log_channel"))],
-                [KeyboardButton(text=self.t(lang, "back"))]
-            ]
-            
-            kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+            kb = MenuFactory.create_admin_panel(lang, self.t)
             self.forced_join_manager.in_forced_join_menu.discard(user_id)
             await message.answer(self.t(lang, "admin_panel"), reply_markup=kb)
         except Exception as e:

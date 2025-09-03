@@ -1,6 +1,7 @@
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 import logging
 import json
+from utils.menu_factory import MenuFactory
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +73,7 @@ class AdminForcedJoinManager:
         self.waiting_for_channel.add(message.from_user.id)
         
         # Show only cancel button
-        keyboard = [
-            [KeyboardButton(text=self.t(lang, "cancel_operation"))]
-        ]
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        kb = MenuFactory.create_cancel_keyboard(lang, self.t)
         await message.answer(self.t(lang, "admin_enter_channel"), reply_markup=kb)
 
     async def handle_forced_join_list(self, message: Message, lang: str):
