@@ -11,7 +11,7 @@ from services.reminder_scheduler import ReminderScheduler
 from handlers.repeat_handler import RepeatHandler
 from handlers.message_handlers import ReminderMessageHandler
 from handlers.callback_handlers import ReminderCallbackHandler
-from handlers.admin_handler import AdminHandler
+from handlers.admin import AdminHandler
 from utils.date_converter import DateConverter
 from utils.security_utils import create_secure_directory, secure_file_permissions
 from utils.logger import LogManager
