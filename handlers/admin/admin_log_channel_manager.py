@@ -1,24 +1,14 @@
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message
 import logging
 import json
+from .base_admin_manager import BaseAdminManager
 
 logger = logging.getLogger(__name__)
 
-class AdminLogChannelManager:
+class AdminLogChannelManager(BaseAdminManager):
     def __init__(self, storage, config, locales):
-        self.storage = storage
-        self.config = config
-        self.locales = locales
+        super().__init__(storage, config, locales)
         self.waiting_for_log_channel = set()
-
-    def t(self, lang, key, **kwargs):
-        text = self.locales.get(lang, self.locales["en"]).get(key, key)
-        if kwargs:
-            try:
-                text = text.format(**kwargs)
-            except (KeyError, ValueError):
-                pass
-        return text
 
     async def handle_log_channel_setup(self, message: Message, lang: str):
         current_log_channel = self.get_current_log_channel()
@@ -28,8 +18,7 @@ class AdminLogChannelManager:
             status_text = self.t(lang, "admin_log_channel_not_set")
         
         self.waiting_for_log_channel.add(message.from_user.id)
-        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        kb = self.create_cancel_keyboard(lang)
         await message.answer(self.t(lang, "admin_log_channel_setup").format(status=status_text), reply_markup=kb)
 
     def get_current_log_channel(self):
@@ -55,11 +44,13 @@ class AdminLogChannelManager:
                 json.dump(config_data, f, indent=2)
             
             await message.answer(self.t(lang, "admin_log_channel_set").format(channel=log_channel_id))
+            self.waiting_for_log_channel.discard(user_id)
+            await self.return_to_admin_panel(message, lang)
             
         except ValueError:
             await message.answer(self.t(lang, "admin_invalid_id"))
         except Exception as e:
             logger.error(f"Error setting log channel: {e}")
             await message.answer(self.t(lang, "admin_error"))
-        finally:
             self.waiting_for_log_channel.discard(user_id)
+            await self.return_to_admin_panel(message, lang)

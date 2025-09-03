@@ -24,17 +24,13 @@ class AdminBroadcastManager:
     async def handle_broadcast_start(self, message: Message, lang: str):
         self.waiting_for_broadcast.add(message.from_user.id)
         
-        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-        
+        kb = self.create_cancel_keyboard(lang)
         await message.answer(self.t(lang, "admin_enter_broadcast"), reply_markup=kb)
 
     async def handle_private_message_start(self, message: Message, lang: str):
         self.waiting_for_private_user_id.add(message.from_user.id)
         
-        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-        
+        kb = self.create_cancel_keyboard(lang)
         await message.answer(self.t(lang, "admin_enter_user_id_private"), reply_markup=kb)
 
     async def process_broadcast(self, message: Message, lang: str):
@@ -52,12 +48,14 @@ class AdminBroadcastManager:
                     pass
             
             await message.answer(self.t(lang, "admin_broadcast_sent").format(count=success_count))
+            self.waiting_for_broadcast.discard(user_id)
+            await self.return_to_admin_panel(message, lang)
             
         except Exception as e:
             logger.error(f"Error in broadcast: {e}")
             await message.answer(self.t(lang, "admin_error"))
-        finally:
             self.waiting_for_broadcast.discard(user_id)
+            await self.return_to_admin_panel(message, lang)
 
     async def process_private_user_id(self, message: Message, lang: str):
         user_id = message.from_user.id
@@ -66,9 +64,7 @@ class AdminBroadcastManager:
             self.waiting_for_private_user_id.discard(user_id)
             self.waiting_for_private_message[user_id] = target_user_id
             
-            keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
-            kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
-            
+            kb = self.create_cancel_keyboard(lang)
             await message.answer(self.t(lang, "admin_enter_private_message"), reply_markup=kb)
         except ValueError:
             await message.answer(self.t(lang, "admin_invalid_id"))
@@ -80,8 +76,10 @@ class AdminBroadcastManager:
         try:
             await self.bot.send_message(target_user_id, message.text)
             await message.answer(self.t(lang, "admin_private_sent"))
+            del self.waiting_for_private_message[user_id]
+            await self.return_to_admin_panel(message, lang)
         except Exception as e:
             logger.error(f"Error sending private message: {e}")
             await message.answer(self.t(lang, "admin_error"))
-        finally:
             del self.waiting_for_private_message[user_id]
+            await self.return_to_admin_panel(message, lang)

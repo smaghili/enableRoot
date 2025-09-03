@@ -43,8 +43,9 @@ bot = Bot(token=config.bot_token)
 dp = Dispatcher()
 db = Database(config.database_url)
 storage = JSONStorage(config.users_path)
+log_manager = LogManager(bot, config, storage)
 ai = AIHandler(config.openrouter_key, config.ai_model)
-scheduler = ReminderScheduler(db, storage, bot)
+scheduler = ReminderScheduler(db, storage, bot, log_manager)
 repeat_handler = RepeatHandler()
 base = os.path.dirname(__file__)
 
@@ -84,7 +85,6 @@ class UserSession:
             self.editing_reminders.pop(uid, None)
 
 session = UserSession()
-log_manager = LogManager(bot, config, storage)
 
 message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config)
 callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config, log_manager)
@@ -332,13 +332,14 @@ async def handle_menu_buttons(message: Message):
             await admin_handler.handle_admin_button(message)
             return
         
-        if (user_id in admin_handler.waiting_for_admin_id or 
-            user_id in admin_handler.waiting_for_broadcast or 
-            user_id in admin_handler.waiting_for_private_user_id or
-            user_id in admin_handler.waiting_for_private_message or 
-            user_id in admin_handler.waiting_for_channel or
-            user_id in admin_handler.waiting_for_limit or
-            user_id in admin_handler.waiting_for_delete_user):
+        if (user_id in admin_handler.user_manager.waiting_for_admin_id or 
+            user_id in admin_handler.broadcast_manager.waiting_for_broadcast or 
+            user_id in admin_handler.broadcast_manager.waiting_for_private_user_id or
+            user_id in admin_handler.broadcast_manager.waiting_for_private_message or 
+            user_id in admin_handler.forced_join_manager.waiting_for_channel or
+            user_id in admin_handler.user_limit_manager.waiting_for_limit or
+            user_id in admin_handler.user_deletion_manager.waiting_for_delete_user or
+            user_id in admin_handler.log_channel_manager.waiting_for_log_channel):
             await admin_handler.handle_admin_message(message)
             return
         

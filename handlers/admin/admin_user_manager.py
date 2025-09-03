@@ -1,31 +1,22 @@
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import logging
 import json
+from .base_admin_manager import BaseAdminManager
 
 logger = logging.getLogger(__name__)
 
-class AdminUserManager:
+class AdminUserManager(BaseAdminManager):
     def __init__(self, storage, config, locales):
-        self.storage = storage
-        self.config = config
-        self.locales = locales
+        super().__init__(storage, config, locales)
         self.waiting_for_admin_id = set()
-
-    def t(self, lang, key, **kwargs):
-        text = self.locales.get(lang, self.locales["en"]).get(key, key)
-        if kwargs:
-            try:
-                text = text.format(**kwargs)
-            except (KeyError, ValueError):
-                pass
-        return text
 
     def is_admin(self, user_id):
         return user_id in self.config.admin_ids
 
     async def handle_add_admin(self, message: Message, lang: str):
         self.waiting_for_admin_id.add(message.from_user.id)
-        await message.answer(self.t(lang, "admin_enter_user_id"))
+        kb = self.create_cancel_keyboard(lang)
+        await message.answer(self.t(lang, "admin_enter_user_id"), reply_markup=kb)
 
     async def handle_remove_admin(self, message: Message, lang: str):
         user_id = message.from_user.id
@@ -71,16 +62,22 @@ class AdminUserManager:
                     json.dump(config_data, f, indent=2)
                 
                 await message.answer(self.t(lang, "admin_added_success").format(admin_id=new_admin_id))
+                self.waiting_for_admin_id.discard(user_id)
+                await self.return_to_admin_panel(message, lang)
             else:
                 await message.answer(self.t(lang, "admin_already_exists"))
+                self.waiting_for_admin_id.discard(user_id)
+                await self.return_to_admin_panel(message, lang)
                 
         except ValueError:
             await message.answer(self.t(lang, "admin_invalid_id"))
         except Exception as e:
             logger.error(f"Error adding admin: {e}")
             await message.answer(self.t(lang, "admin_error"))
-        finally:
             self.waiting_for_admin_id.discard(user_id)
+            await self.return_to_admin_panel(message, lang)
+
+
 
     async def handle_admin_removal_callback(self, callback: CallbackQuery):
         user_id = callback.from_user.id

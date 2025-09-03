@@ -161,13 +161,15 @@ class AIHandler:
             self.logger.error(f"AI parsing error: {e}")
             self.logger.error(f"Error type: {type(e).__name__}")
             raise Exception(f"AI parsing completely failed: {e}")
-    def _parse_time_hour(self, time_hour):
-        """Convert decimal hour to hour and minute"""
-        if time_hour is None:
+    def _parse_time(self, time_str):
+        """Parse HH:MM format to hour and minute"""
+        if not time_str or time_str is None:
             return None, None
-        hour = int(time_hour)
-        minute = int((time_hour - hour) * 60)
-        return hour, minute
+        try:
+            hour, minute = map(int, time_str.split(':'))
+            return hour, minute
+        except:
+            return None, None
 
     def _calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
         now = datetime.datetime.now()
@@ -178,9 +180,9 @@ class AIHandler:
             month = specific_date.get("month")
             year = specific_date.get("year")
             if day and month:
-                time_hour = reminder.get("time_hour")
-                if time_hour is not None:
-                    target_hour, target_minute = self._parse_time_hour(time_hour)
+                time_str = reminder.get("time")
+                if time_str is not None:
+                    target_hour, target_minute = self._parse_time(time_str)
                 else:
                     target_hour, target_minute = now.hour, now.minute
                 if reminder.get("category") == "birthday" and year:
@@ -238,9 +240,9 @@ class AIHandler:
         
         relative_days = reminder.get("relative_days")
         if relative_days is not None:
-            time_hour = reminder.get("time_hour")
-            if time_hour is not None:
-                target_hour, target_minute = self._parse_time_hour(time_hour)
+            time_str = reminder.get("time")
+            if time_str is not None:
+                target_hour, target_minute = self._parse_time(time_str)
             else:
                 target_hour = now.hour
                 target_minute = now.minute
@@ -266,9 +268,9 @@ class AIHandler:
         if isinstance(repeat_data, str):
             repeat_data = json.loads(repeat_data) if repeat_data.startswith("{") else {"type": repeat_data}
         repeat_type = repeat_data.get("type", "none")
-        time_hour = reminder.get("time_hour")
-        if time_hour is not None:
-            target_hour, target_minute = self._parse_time_hour(time_hour)
+        time_str = reminder.get("time")
+        if time_str is not None:
+            target_hour, target_minute = self._parse_time(time_str)
         else:
             target_hour = now.hour
             target_minute = now.minute
@@ -307,7 +309,7 @@ class AIHandler:
             next_occurrence = next_occurrence.replace(hour=target_hour, minute=target_minute)
             return next_occurrence.strftime("%Y-%m-%d %H:%M")
         elif repeat_type == "interval":
-            if time_hour is not None:
+            if time_str is not None:
                 start_time = now.replace(hour=target_hour, minute=target_minute)
                 if start_time <= now:
                     start_time += datetime.timedelta(days=1)
@@ -323,7 +325,11 @@ class AIHandler:
             else:
                 next_time = now
             return next_time.strftime("%Y-%m-%d %H:%M")
-        return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+        
+        target_date = now.replace(hour=target_hour, minute=target_minute)
+        if target_date <= now:
+            target_date += datetime.timedelta(days=1)
+        return target_date.strftime("%Y-%m-%d %H:%M")
     def _validate_parsed_object(self, obj: Any) -> bool:
         if not isinstance(obj, dict):
             return False

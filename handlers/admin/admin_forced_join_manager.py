@@ -70,7 +70,13 @@ class AdminForcedJoinManager:
 
     async def handle_forced_join_add(self, message: Message, lang: str):
         self.waiting_for_channel.add(message.from_user.id)
-        await message.answer(self.t(lang, "admin_enter_channel"))
+        
+        # Show only cancel button
+        keyboard = [
+            [KeyboardButton(text=self.t(lang, "cancel_operation"))]
+        ]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        await message.answer(self.t(lang, "admin_enter_channel"), reply_markup=kb)
 
     async def handle_forced_join_list(self, message: Message, lang: str):
         channels = self.config.forced_join.get("channels", [])
@@ -115,6 +121,20 @@ class AdminForcedJoinManager:
             await message.answer(self.t(lang, "admin_error"))
         finally:
             self.waiting_for_channel.discard(user_id)
+            # Return to admin panel keyboard
+            await self.return_to_admin_panel(message, lang)
+
+    async def return_to_admin_panel(self, message: Message, lang: str):
+        keyboard = [
+            [KeyboardButton(text=self.t(lang, "admin_add_admin")), KeyboardButton(text=self.t(lang, "admin_remove_admin"))],
+            [KeyboardButton(text=self.t(lang, "admin_general_stats")), KeyboardButton(text=self.t(lang, "admin_delete_user"))],
+            [KeyboardButton(text=self.t(lang, "admin_broadcast")), KeyboardButton(text=self.t(lang, "admin_private_message"))],
+            [KeyboardButton(text=self.t(lang, "admin_user_limit")), KeyboardButton(text=self.t(lang, "admin_forced_join"))],
+            [KeyboardButton(text=self.t(lang, "admin_log_channel"))],
+            [KeyboardButton(text=self.t(lang, "back"))]
+        ]
+        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        await message.answer(self.t(lang, "admin_panel"), reply_markup=kb)
 
     def get_forced_join_status_from_config(self):
         try:

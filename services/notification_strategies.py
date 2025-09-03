@@ -19,8 +19,9 @@ class NotificationStrategy(ABC):
 class TelegramNotificationStrategy(NotificationStrategy):
     """Standard Telegram notification strategy"""
     
-    def __init__(self):
+    def __init__(self, log_manager=None):
         self.logger = logging.getLogger(__name__)
+        self.log_manager = log_manager
     
     async def send_notification(self, bot: Bot, user_id: int, reminder_data: Dict[str, Any], 
                               lang: str, t_func) -> bool:
@@ -28,17 +29,9 @@ class TelegramNotificationStrategy(NotificationStrategy):
             reminder_id = reminder_data.get('id')
             category = reminder_data.get('category', 'general')
             content = reminder_data.get('content', 'No content')
-            
-            # Use factory to get reminder type
-            reminder_type = ReminderFactory.create(category)
-            
-            # Format message
+            reminder_type = ReminderFactory.create(category)   
             message_text = reminder_type.format_message(content, lang, t_func)
-            
-            # Create keyboard if needed
-            keyboard = reminder_type.create_keyboard(reminder_id, lang, t_func)
-            
-            # Send message
+            keyboard = reminder_type.create_keyboard(reminder_id, lang, t_func)      
             await bot.send_message(
                 chat_id=user_id,
                 text=message_text,
@@ -46,6 +39,11 @@ class TelegramNotificationStrategy(NotificationStrategy):
             )
             
             self.logger.info(f"Sent {category} reminder {reminder_id} to user {user_id}")
+            if self.log_manager:
+                await self.log_manager.send_reminder_log(
+                    reminder_id, user_id, category, content, "sent"
+                )
+            
             return True
             
         except Exception as e:

@@ -1,30 +1,19 @@
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message
 import logging
 import os
+from .base_admin_manager import BaseAdminManager
 
 logger = logging.getLogger(__name__)
 
-class AdminUserDeletionManager:
+class AdminUserDeletionManager(BaseAdminManager):
     def __init__(self, storage, db, config, locales):
-        self.storage = storage
+        super().__init__(storage, config, locales)
         self.db = db
-        self.config = config
-        self.locales = locales
         self.waiting_for_delete_user = set()
-
-    def t(self, lang, key, **kwargs):
-        text = self.locales.get(lang, self.locales["en"]).get(key, key)
-        if kwargs:
-            try:
-                text = text.format(**kwargs)
-            except (KeyError, ValueError):
-                pass
-        return text
 
     async def handle_delete_user_start(self, message: Message, lang: str):
         self.waiting_for_delete_user.add(message.from_user.id)
-        keyboard = [[KeyboardButton(text=self.t(lang, "cancel_operation"))]]
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        kb = self.create_cancel_keyboard(lang)
         await message.answer(self.t(lang, "enter_user_id_delete"), reply_markup=kb)
 
     async def process_delete_user(self, message: Message, lang: str):
@@ -73,15 +62,18 @@ class AdminUserDeletionManager:
                             logger.error(f"Error deleting user reminders from DB: {db_error}")
                         
                         await message.answer(self.t(lang, "user_deleted_success").format(user_id=target_user_display))
+                        self.waiting_for_delete_user.discard(user_id)
+                        await self.return_to_admin_panel(message, lang)
                     else:
                         await message.answer(self.t(lang, "user_not_found"))
+                        self.waiting_for_delete_user.discard(user_id)
+                        await self.return_to_admin_panel(message, lang)
                         
                 except ValueError:
                     await message.answer(self.t(lang, "admin_invalid_id"))
-                    return
                 
         except Exception as e:
             logger.error(f"Error deleting user: {e}")
             await message.answer(self.t(lang, "admin_error"))
-        finally:
             self.waiting_for_delete_user.discard(user_id)
+            await self.return_to_admin_panel(message, lang)

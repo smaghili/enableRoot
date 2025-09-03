@@ -10,7 +10,7 @@ from services.reminder_types import ReminderFactory
 
 
 class ReminderScheduler(IScheduler):
-    def __init__(self, db, json_storage, bot, notification_context: Optional[NotificationContext] = None):
+    def __init__(self, db, json_storage, bot, log_manager=None, notification_context: Optional[NotificationContext] = None):
         self.db = db
         self.json_storage = json_storage
         self.bot = bot
@@ -21,7 +21,7 @@ class ReminderScheduler(IScheduler):
         self.repeat_handler = RepeatHandler()
         self.reminder_factory = ReminderFactory()
         self.notification_context = notification_context or NotificationContext(
-            NotificationStrategyFactory.create("standard")
+            NotificationStrategyFactory.create("standard", log_manager=log_manager)
         )
         self._load_locales()
         

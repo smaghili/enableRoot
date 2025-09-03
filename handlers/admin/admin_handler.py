@@ -103,6 +103,7 @@ class AdminHandler:
 
     async def handle_cancel_operation(self, message: Message, lang: str):
         user_id = message.from_user.id
+        self.user_manager.waiting_for_admin_id.discard(user_id)
         self.broadcast_manager.waiting_for_broadcast.discard(user_id)
         self.forced_join_manager.waiting_for_channel.discard(user_id)
         self.broadcast_manager.waiting_for_private_user_id.discard(user_id)
@@ -110,6 +111,7 @@ class AdminHandler:
             del self.broadcast_manager.waiting_for_private_message[user_id]
         self.user_deletion_manager.waiting_for_delete_user.discard(user_id)
         self.log_channel_manager.waiting_for_log_channel.discard(user_id)
+        self.user_limit_manager.waiting_for_limit.discard(user_id)
         self.forced_join_manager.in_forced_join_menu.discard(user_id)
         await self.show_admin_panel(message)
 

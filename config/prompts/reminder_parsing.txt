@@ -7,7 +7,7 @@ OUTPUT: Valid JSON only - ensure ALL quotes are properly closed:
     {{
       "category": "medicine|birthday|appointment|work|exercise|prayer|shopping|call|study|installment|bill|general",
       "content": "clean title (≤40 chars)",
-      "time_hour": number|null,
+      "time": "HH:MM"|null,
       "relative_days": number|null,
       "specific_date": {{ "day": number|null, "month": number|null, "year": number|null }},
       "repeat": {{ "type": "none|daily|weekly|monthly|yearly|interval", "value": number|null, "unit": "minutes|hours|days|weeks|null", "day": number|null, "weekday": "monday|tuesday|wednesday|thursday|friday|saturday|sunday"|null }}
@@ -21,9 +21,9 @@ RULES:
 4. Weekly single: "every Friday" / "هر جمعه" / "cada viernes" → {{"type": "weekly", "weekday": "friday"}}
 5. Weekly multiple: "Monday and Wednesday" / "دوشنبه و چهارشنبه" → CREATE 2 SEPARATE reminders, each with {{"type": "weekly", "weekday": "monday"}} and {{"type": "weekly", "weekday": "wednesday"}}
 6. Time extraction: 
-   - Parse time from any language and format
-   - Convert half hours (7:30, نیم, half past) to decimal: 7.5
-   - Convert quarter hours (ربع, quarter) to decimal: 3.25 for past, 3.75 for to
+   - Parse time from any language and format into "HH:MM" format (24-hour)
+   - Examples: "ساعت ۱۱ و ۴۱ دقیقه" → "11:41", "7:30 PM" → "19:30", "نیم ساعت بعد از ۳" → "15:30"
+   - Always use 24-hour format with leading zeros: "09:05", "23:45"
    - Recognize all time expressions regardless of language
 7. Relative dates: "فردا/tomorrow" → "relative_days": 1, "پسفردا" → 2, "سه روز دیگه" → 3, "پریروز" → -2, "دیروز" → -1, "امروز" → 0
 8. Specific dates: "۱/۱۲/۱۳۵۰" → "specific_date": {{"day": 1, "month": 12, "year": 1350}}, "2025/03/15" → "specific_date": {{"day": 15, "month": 3, "year": 2025}}

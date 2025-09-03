@@ -387,12 +387,7 @@ class ReminderCallbackHandler(IMessageHandler):
                         reminder_data["repeat"]
                     )
                     self.storage.add_reminder(user_id, reminder_data)
-                    if self.log_manager:
-                        await self.log_manager.send_reminder_log(
-                            reminder_id, user_id, 
-                            reminder_data["category"], 
-                            reminder_data["content"]
-                        )
+
                     created_count += 1
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "multiple_reminders_saved").format(count=created_count))
@@ -416,12 +411,7 @@ class ReminderCallbackHandler(IMessageHandler):
                     reminder_data["repeat"]
                 )
                 self.storage.add_reminder(user_id, reminder_data)
-                if self.log_manager:
-                    await self.log_manager.send_reminder_log(
-                        reminder_id, user_id, 
-                        reminder_data["category"], 
-                        reminder_data["content"]
-                    )
+
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "reminder_saved"))
         else:

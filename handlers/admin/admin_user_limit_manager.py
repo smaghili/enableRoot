@@ -1,30 +1,21 @@
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message
 import logging
 import json
+from .base_admin_manager import BaseAdminManager
 
 logger = logging.getLogger(__name__)
 
-class AdminUserLimitManager:
+class AdminUserLimitManager(BaseAdminManager):
     def __init__(self, storage, config, locales):
-        self.storage = storage
-        self.config = config
-        self.locales = locales
+        super().__init__(storage, config, locales)
         self.waiting_for_limit = set()
-
-    def t(self, lang, key, **kwargs):
-        text = self.locales.get(lang, self.locales["en"]).get(key, key)
-        if kwargs:
-            try:
-                text = text.format(**kwargs)
-            except (KeyError, ValueError):
-                pass
-        return text
 
     async def handle_user_limit(self, message: Message, lang: str):
         current_limit = self.get_current_limit_from_config()
         limit_text = self.t(lang, "admin_current_limit").format(limit=current_limit)
         self.waiting_for_limit.add(message.from_user.id)
-        await message.answer(limit_text)
+        kb = self.create_cancel_keyboard(lang)
+        await message.answer(limit_text, reply_markup=kb)
 
     async def process_limit_change(self, message: Message, lang: str):
         user_id = message.from_user.id
@@ -50,14 +41,17 @@ class AdminUserLimitManager:
                 await message.answer(self.t(lang, "admin_limit_removed"))
             else:
                 await message.answer(self.t(lang, "admin_limit_updated").format(limit=new_limit))
+            
+            self.waiting_for_limit.discard(user_id)
+            await self.return_to_admin_panel(message, lang)
                 
         except ValueError:
             await message.answer(self.t(lang, "admin_invalid_limit"))
         except Exception as e:
             logger.error(f"Error changing limit: {e}")
             await message.answer(self.t(lang, "admin_error"))
-        finally:
             self.waiting_for_limit.discard(user_id)
+            await self.return_to_admin_panel(message, lang)
 
     def get_current_limit_from_config(self):
         try:
