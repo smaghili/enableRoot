@@ -14,7 +14,7 @@ except ImportError:
     jdatetime = None
 logger = logging.getLogger(__name__)
 class ReminderCallbackHandler(IMessageHandler):
-    def __init__(self, storage, db, ai, repeat_handler, locales, message_handler, session, config, log_manager=None):
+    def __init__(self, storage, db, ai, repeat_handler, locales, message_handler, session, config, admin_handler=None, log_manager=None):
         self.storage = storage
         self.db = db
         self.ai = ai
@@ -23,6 +23,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.message_handler = message_handler
         self.session = session
         self.config = config
+        self.admin_handler = admin_handler
         self.log_manager = log_manager
         self.user_request_times = {}
     def t(self, lang, key):
@@ -144,7 +145,7 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         await callback_query.message.edit_text(self.t(lang_code, "saved"))
         await callback_query.answer()
-        kb = MenuFactory.create_main_menu(lang_code, self.t)
+        kb = MenuFactory.create_main_menu(lang_code, self.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
         await callback_query.message.answer(self.t(lang_code, "menu"), reply_markup=kb)
     async def handle_change_language(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
@@ -342,7 +343,7 @@ class ReminderCallbackHandler(IMessageHandler):
                     repeat_value = json.dumps(repeat_value)
                 repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-                kb = MenuFactory.create_main_menu(lang, self.message_handler.t)
+                kb = MenuFactory.create_main_menu(lang, self.message_handler.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
                 calendar_type = data["settings"].get("calendar", "miladi")
                 display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
                 await callback_query.message.delete()

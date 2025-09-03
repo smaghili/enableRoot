@@ -13,7 +13,7 @@ from utils.menu_factory import MenuFactory
 logger = logging.getLogger(__name__)
 
 class ReminderMessageHandler(IMessageHandler):
-    def __init__(self, storage, db, ai, repeat_handler, locales, session, config):
+    def __init__(self, storage, db, ai, repeat_handler, locales, session, config, admin_handler=None):
         self.storage = storage
         self.db = db
         self.ai = ai
@@ -21,6 +21,7 @@ class ReminderMessageHandler(IMessageHandler):
         self.locales = locales
         self.session = session
         self.config = config
+        self.admin_handler = admin_handler
         self.user_request_times = {}
         self.user_message_count = {}
         self.waiting_for_city = {}
@@ -252,7 +253,7 @@ class ReminderMessageHandler(IMessageHandler):
             self.session.editing_reminders.pop(user_id, None)
             if user_id in self.session.pending:
                 self.session.pending.pop(user_id)
-            kb = MenuFactory.create_main_menu(lang, self.t)
+            kb = MenuFactory.create_main_menu(lang, self.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
             
             await message.answer(self.t(lang, "edit_cancelled"), reply_markup=kb)
             

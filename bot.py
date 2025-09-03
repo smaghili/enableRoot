@@ -87,9 +87,9 @@ class UserSession:
 
 session = UserSession()
 
-message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config)
-callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config, log_manager)
 admin_handler = AdminHandler(storage, db, bot, config, locales)
+message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config, admin_handler)
+callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config, admin_handler, log_manager)
 
 @dp.message(Command("start"))
 async def start_message(message: Message):
