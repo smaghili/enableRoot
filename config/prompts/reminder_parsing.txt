@@ -1,6 +1,7 @@
-Extract reminder patterns from user text. Support ALL languages.
+You are a multilingual AI that extracts reminder patterns from ANY language.
+Use your knowledge to understand patterns, fix typos, and parse time expressions.
 Inputs: text="{text}"
-OUTPUT: Strict JSON only:
+OUTPUT: Valid JSON only - ensure ALL quotes are properly closed:
 {{
   "reminders": [
     {{
@@ -19,16 +20,24 @@ RULES:
 3. Daily: "every day" / "هر روز" / "todos los días" → {{"type": "daily"}}
 4. Weekly single: "every Friday" / "هر جمعه" / "cada viernes" → {{"type": "weekly", "weekday": "friday"}}
 5. Weekly multiple: "Monday and Wednesday" / "دوشنبه و چهارشنبه" → CREATE 2 SEPARATE reminders, each with {{"type": "weekly", "weekday": "monday"}} and {{"type": "weekly", "weekday": "wednesday"}}
-6. Time extraction: "at 7" / "ساعت 7" / "a las 7" → "time_hour": 7
+6. Time extraction: 
+   - Parse time from any language and format
+   - Convert half hours (7:30, نیم, half past) to decimal: 7.5
+   - Convert quarter hours (ربع, quarter) to decimal: 3.25 for past, 3.75 for to
+   - Recognize all time expressions regardless of language
 7. Relative dates: "فردا/tomorrow" → "relative_days": 1, "پسفردا" → 2, "سه روز دیگه" → 3, "پریروز" → -2, "دیروز" → -1, "امروز" → 0
 8. Specific dates: "۱/۱۲/۱۳۵۰" → "specific_date": {{"day": 1, "month": 12, "year": 1350}}, "2025/03/15" → "specific_date": {{"day": 15, "month": 3, "year": 2025}}
 9. Birthday dates: For birthdays with year (like ۱/۱۲/۱۳۵۰), keep the exact year provided - do NOT change to current year
 10. Content: Remove time/schedule words, keep action/object only
-11. Medicine content: For medicine reminders, extract ONLY the medicine name without action verbs
-    - "قرص سفالکسین بخورم" → "قرص سفالکسین"
-    - "شربت آموکسی سیلین مصرف کنم" → "شربت آموکسی سیلین"
-    - "take aspirin pill" → "aspirin pill"
-    - "drink cough syrup" → "cough syrup"
+11. Medicine content: For medicine reminders:
+    - Keep medicine form (قرص, شربت, کپسول, pill, tablet, syrup, capsule) + medicine name
+    - Remove ONLY action verbs (take, drink, consume, بخورم, مصرف کنم, etc.)
+    - Automatically correct obvious typos, misspellings, and repetitive characters in medicine names
+    - Use your knowledge of common medicine names to fix errors
+    - Remove dosage instructions but keep the medicine form and name
 12. Category: Detect from content
-CRITICAL: If text mentions multiple days (and/or), create separate reminders for each day.
-JSON only, no markdown.
+CRITICAL: 
+- If text mentions multiple days (and/or), create separate reminders for each day
+- Always return valid JSON with properly closed quotes and brackets
+- Do not add any markdown formatting or extra text
+- Ensure JSON structure is complete and valid

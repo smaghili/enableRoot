@@ -101,12 +101,28 @@ class AIHandler:
                 {"role": "user", "content": prompt},
             ]
             
-            content = await self._make_api_call(messages, max_tokens=400, temperature=0.1)
+            content = await self._make_api_call(messages, max_tokens=800, temperature=0.1)
             if not content:
                 raise Exception("API call failed")
                 
             self.logger.info(f"OpenRouter response: {content}")
-            obj = json.loads(content)
+            try:
+                obj = json.loads(content)
+            except json.JSONDecodeError as e:
+                self.logger.warning(f"JSON decode error: {e}")
+                if not content.strip().endswith('}'):
+                    self.logger.info("Attempting to fix incomplete JSON")
+                    content = content.strip()
+                    missing_braces = content.count('{') - content.count('}')
+                    if missing_braces > 0:
+                        content += '}' * missing_braces
+                    try:
+                        obj = json.loads(content)
+                        self.logger.info("Successfully fixed incomplete JSON")
+                    except json.JSONDecodeError:
+                        raise e
+                else:
+                    raise e
             self.logger.info(f"Parsed JSON: {obj}")
             if "reminders" in obj and isinstance(obj["reminders"], list):
                 validated_reminders = []
@@ -145,6 +161,14 @@ class AIHandler:
             self.logger.error(f"AI parsing error: {e}")
             self.logger.error(f"Error type: {type(e).__name__}")
             raise Exception(f"AI parsing completely failed: {e}")
+    def _parse_time_hour(self, time_hour):
+        """Convert decimal hour to hour and minute"""
+        if time_hour is None:
+            return None, None
+        hour = int(time_hour)
+        minute = int((time_hour - hour) * 60)
+        return hour, minute
+
     def _calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
         now = datetime.datetime.now()
         
@@ -155,8 +179,10 @@ class AIHandler:
             year = specific_date.get("year")
             if day and month:
                 time_hour = reminder.get("time_hour")
-                target_hour = int(time_hour) if time_hour is not None else now.hour
-                target_minute = 0 if time_hour is not None else now.minute
+                if time_hour is not None:
+                    target_hour, target_minute = self._parse_time_hour(time_hour)
+                else:
+                    target_hour, target_minute = now.hour, now.minute
                 if reminder.get("category") == "birthday" and year:
                     if user_calendar == "shamsi" and persian:
                         current_shamsi = persian.from_gregorian(now.year, now.month, now.day)
@@ -214,8 +240,7 @@ class AIHandler:
         if relative_days is not None:
             time_hour = reminder.get("time_hour")
             if time_hour is not None:
-                target_hour = int(time_hour)
-                target_minute = 0
+                target_hour, target_minute = self._parse_time_hour(time_hour)
             else:
                 target_hour = now.hour
                 target_minute = now.minute
@@ -243,8 +268,7 @@ class AIHandler:
         repeat_type = repeat_data.get("type", "none")
         time_hour = reminder.get("time_hour")
         if time_hour is not None:
-            target_hour = int(time_hour)
-            target_minute = 0
+            target_hour, target_minute = self._parse_time_hour(time_hour)
         else:
             target_hour = now.hour
             target_minute = now.minute

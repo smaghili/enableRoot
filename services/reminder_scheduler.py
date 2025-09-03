@@ -20,17 +20,14 @@ class ReminderScheduler(IScheduler):
         self.logger = logging.getLogger(__name__)
         self.repeat_handler = RepeatHandler()
         self.reminder_factory = ReminderFactory()
-        
-        # Use dependency injection for notification strategy
         self.notification_context = notification_context or NotificationContext(
             NotificationStrategyFactory.create("standard")
         )
-        
         self._load_locales()
         
     def _load_locales(self):
         self.locales = {}
-        base_path = os.path.dirname(os.path.dirname(__file__))  # Go up one level from services/
+        base_path = os.path.dirname(os.path.dirname(__file__))
         locale_dir = os.path.join(base_path, "localization")
         
         if os.path.exists(locale_dir):
@@ -60,7 +57,6 @@ class ReminderScheduler(IScheduler):
     async def _loop(self):
         while True:
             try:
-                # Check if database connection is still open
                 try:
                     with self.db.lock:
                         self.db.conn.execute("SELECT 1")
@@ -106,32 +102,31 @@ class ReminderScheduler(IScheduler):
         async with self.processing_semaphore:
             try:
                 await self._send_reminder(rid, uid, cat, content, repeat)
-                
-                # Handle installment special case
                 if cat == "installment":
                     await self._handle_installment_reminder(rid, uid, time_str, repeat)
-                elif repeat == "none":
-                    self.db.update_status(rid, "completed")
-                    self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
                 else:
-                    # Get timezone for this reminder
-                    try:
-                        with self.db.lock:
-                            cur = self.db.conn.cursor()
-                            cur.execute("select timezone from reminders where id=?", (rid,))
-                            row = cur.fetchone()
-                            cur.close()
-                        tz = row[0] if row else "+00:00"
-                    except Exception as e:
-                        self.logger.error(f"Error getting timezone for reminder {rid}: {e}")
-                        tz = "+00:00"
-                    new_time = self._next_time(time_str, repeat, tz)
-                    if new_time:
-                        self.db.update_time(rid, new_time)
-                        self.logger.info(f"Updated recurring reminder {rid} to {new_time}")
+                    repeat_pattern = self.repeat_handler.from_json(repeat)
+                    if repeat_pattern.type == "none":
+                        self.db.update_status(rid, "completed")
+                        self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
                     else:
-                        self.logger.error(f"Failed to calculate next time for reminder {rid}")
-                        self.db.update_status(rid, "cancelled")
+                        try:
+                            with self.db.lock:
+                                cur = self.db.conn.cursor()
+                                cur.execute("select timezone from reminders where id=?", (rid,))
+                                row = cur.fetchone()
+                                cur.close()
+                            tz = row[0] if row else "+00:00"
+                        except Exception as e:
+                            self.logger.error(f"Error getting timezone for reminder {rid}: {e}")
+                            tz = "+00:00"
+                        new_time = self._next_time(time_str, repeat, tz)
+                        if new_time:
+                            self.db.update_time(rid, new_time)
+                            self.logger.info(f"Updated recurring reminder {rid} to {new_time}")
+                        else:
+                            self.logger.error(f"Failed to calculate next time for reminder {rid}")
+                            self.db.update_status(rid, "cancelled")
             except Exception as e:
                 self.logger.error(f"Error processing reminder {rid}: {e}")
                 try:
@@ -140,9 +135,7 @@ class ReminderScheduler(IScheduler):
                     self.logger.error(f"Failed to cancel reminder {rid}: {db_error}")
 
     async def _handle_installment_reminder(self, rid, uid, time_str, repeat):
-        """Handle special logic for installment reminders - repeat for 3 days if not paid"""
         try:
-            # Check how many times this installment has been sent
             with self.db.lock:
                 cur = self.db.conn.cursor()
                 cur.execute(
@@ -153,22 +146,19 @@ class ReminderScheduler(IScheduler):
                 cur.close()
             
             if retry_count < 3:
-                # Create retry reminder for next day
                 dt_local = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
                 next_day = dt_local + datetime.timedelta(days=1)
                 
-                # Add retry reminder
                 self.db.add(
                     uid,
                     "installment_retry", 
                     f"Retry #{retry_count + 1} for reminder {rid}",
                     next_day.strftime("%Y-%m-%d %H:%M"),
-                    "+00:00",  # Will be converted properly
+                    "+00:00",
                     '{"type": "none"}'
                 )
                 self.logger.info(f"Created installment retry {retry_count + 1} for reminder {rid}")
             else:
-                # After 3 retries, continue with normal recurring pattern
                 if repeat != "none":
                     new_time = self._next_time(time_str, repeat, "+00:00")
                     if new_time:
@@ -186,8 +176,6 @@ class ReminderScheduler(IScheduler):
         while True:
             try:
                 await asyncio.sleep(3600)
-                
-                # Check if database connection is still open
                 try:
                     with self.db.lock:
                         self.db.conn.execute("SELECT 1")
@@ -214,15 +202,12 @@ class ReminderScheduler(IScheduler):
             user_lang = "en"
             safe_content = str(content)[:500] if content else "No content"
         
-        # Prepare reminder data for notification strategy
         reminder_data = {
             'id': rid,
             'category': category,
             'content': safe_content,
             'repeat': repeat
         }
-        
-        # Use notification strategy to send reminder
         success = await self.notification_context.send_notification(
             self.bot, uid, reminder_data, user_lang, self.t
         )
@@ -233,17 +218,13 @@ class ReminderScheduler(IScheduler):
 
     def _next_time(self, time_str: str, repeat: str, timezone: str = "+00:00") -> Optional[str]:
         try:
-            # time_str is already in local time (converted from UTC in due() method)
             dt_local = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-
             repeat_pattern = self.repeat_handler.from_json(repeat)
             next_dt_local = self.repeat_handler.calculate_next_time(dt_local, repeat_pattern)
-
             if next_dt_local:
                 return next_dt_local.strftime("%Y-%m-%d %H:%M")
             else:
                 return None
-
         except (ValueError, TypeError) as e:
             self.logger.error(f"Error calculating next time for {time_str}, {repeat}: {e}")
             return None

@@ -75,11 +75,11 @@ class Database:
             dt_utc = dt_local - _parse_tz(timezone)
             time_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
 
-            self.conn.execute(
+            cursor = self.conn.execute(
                 "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
                 (user_id, category, content, time_utc, timezone, repeat, status),
             )
-            reminder_id = self.conn.lastrowid
+            reminder_id = cursor.lastrowid
             if category == "birthday" and repeat == "yearly":
                 birthday_8am = dt_local.replace(hour=8, minute=0, second=0, microsecond=0)
                 birthday_8am_utc = birthday_8am - _parse_tz(timezone)
