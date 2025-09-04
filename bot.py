@@ -1,8 +1,6 @@
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from aiogram.filters import Command
-
-# Local imports
 from config.config import Config
 from database import Database
 from utils.json_storage import JSONStorage
@@ -13,10 +11,10 @@ from handlers.message_handlers import ReminderMessageHandler
 from handlers.callback_handlers import ReminderCallbackHandler
 from handlers.admin import AdminHandler
 from utils.date_converter import DateConverter
+from utils.display_helper import DisplayHelper
 from utils.security_utils import create_secure_directory, secure_file_permissions
 from utils.logger import LogManager
 from utils.menu_factory import MenuFactory
-
 import json
 import os
 import datetime
@@ -144,12 +142,13 @@ async def list_reminders(message: Message):
         if not reminders:
             await message.answer(message_handler.t(lang, "no_reminders"))
         else:
+            display_helper = DisplayHelper()
             lines = []
-            for rid, cat, content, time, tz, repeat, status in reminders:
-                emoji = config.emoji_mapping.get(cat, "⏰")
-                safe_content = message_handler.sanitize_input(str(content))[:50]
-                display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
-                lines.append(f"{rid}. {emoji} {safe_content} @ {display_time}")
+            for reminder_tuple in reminders:
+                reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type)
+                emoji = config.emoji_mapping.get(reminder['category'], "⏰")
+                safe_content = message_handler.sanitize_input(str(reminder['content']))[:50]
+                lines.append(f"{reminder['id']}. {emoji} {safe_content} @ {reminder['display_time']}")
             await message.answer("\n".join(lines))
     except Exception as e:
         logger.error(f"Error in list_reminders for user {user_id}: {e}")
@@ -163,6 +162,7 @@ async def show_reminders_list(message: Message):
         data = storage.load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
+        user_timezone = data.get("settings", {}).get("timezone", "+03:30")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_reminders_list for user {user_id}: {e}")
@@ -170,15 +170,16 @@ async def show_reminders_list(message: Message):
     if not reminders:
         await message.answer(message_handler.t(lang, "no_reminders"))
         return
+    display_helper = DisplayHelper()
     lines = [message_handler.t(lang, "reminders_list_title")]
-    for rid, cat, content, time, tz, repeat, status in reminders:
-        emoji = config.emoji_mapping.get(cat, "⏰")
-        repeat_pattern = repeat_handler.from_json(repeat)
+    for reminder_tuple in reminders:
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone)
+        emoji = config.emoji_mapping.get(reminder['category'], "⏰")
+        repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
-        lines.append(message_handler.t(lang, "reminder_id").format(id=rid))
-        lines.append(f"{emoji} {content}")
-        lines.append(message_handler.t(lang, "reminder_time").format(time=display_time))
+        lines.append(message_handler.t(lang, "reminder_id").format(id=reminder['id']))
+        lines.append(f"{emoji} {reminder['content']}")
+        lines.append(message_handler.t(lang, "reminder_time").format(time=reminder['display_time']))
         lines.append(message_handler.t(lang, "reminder_repeat").format(repeat=repeat_text))
         lines.append("─" * 25)
     await message.answer("\n".join(lines))
@@ -228,15 +229,16 @@ async def show_delete_reminders(message: Message):
     if not reminders:
         await message.answer(message_handler.t(lang, "no_reminders"))
         return
+    display_helper = DisplayHelper()
     buttons = []
-    for rid, cat, content, time, tz, repeat, status in reminders:
-        emoji = config.emoji_mapping.get(cat, "⏰")
-        repeat_pattern = repeat_handler.from_json(repeat)
+    for reminder_tuple in reminders:
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type)
+        emoji = config.emoji_mapping.get(reminder['category'], "⏰")
+        repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
-        display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
-        button_text = f"🗑 {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"delete_confirm_{rid}")])
+        display_content = reminder['content'][:config.max_button_length] + "..." if len(reminder['content']) > config.max_button_length else reminder['content']
+        button_text = f"🗑 {emoji} {display_content}\n📅 {reminder['display_time']} | 🔄 {repeat_text}"
+        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"delete_confirm_{reminder['id']}")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(message_handler.t(lang, "delete_which"), reply_markup=kb)
 
@@ -256,15 +258,16 @@ async def show_edit_reminders(message: Message):
     if not reminders:
         await message.answer(message_handler.t(lang, "no_reminders"))
         return
+    display_helper = DisplayHelper()
     buttons = []
-    for rid, cat, content, time, tz, repeat, status in reminders:
-        emoji = config.emoji_mapping.get(cat, "⏰")
-        repeat_pattern = repeat_handler.from_json(repeat)
+    for reminder_tuple in reminders:
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type)
+        emoji = config.emoji_mapping.get(reminder['category'], "⏰")
+        repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
-        display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
-        button_text = f"✏️ {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
-        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"edit_select_{rid}")])
+        display_content = reminder['content'][:config.max_button_length] + "..." if len(reminder['content']) > config.max_button_length else reminder['content']
+        button_text = f"✏️ {emoji} {display_content}\n📅 {reminder['display_time']} | 🔄 {repeat_text}"
+        buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"edit_select_{reminder['id']}")])
     kb = InlineKeyboardMarkup(inline_keyboard=buttons)
     await message.answer(message_handler.t(lang, "edit_which"), reply_markup=kb)
 

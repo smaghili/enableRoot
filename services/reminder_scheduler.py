@@ -218,11 +218,16 @@ class ReminderScheduler(IScheduler):
 
     def _next_time(self, time_str: str, repeat: str, timezone: str = "+00:00") -> Optional[str]:
         try:
-            dt_local = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+            dt_utc = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+            sign = 1 if timezone.startswith("+") else -1
+            hours, minutes = timezone[1:].split(":")
+            tz_offset = datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
+            dt_local = dt_utc + tz_offset
             repeat_pattern = self.repeat_handler.from_json(repeat)
             next_dt_local = self.repeat_handler.calculate_next_time(dt_local, repeat_pattern)
             if next_dt_local:
-                return next_dt_local.strftime("%Y-%m-%d %H:%M")
+                next_dt_utc = next_dt_local - tz_offset
+                return next_dt_utc.strftime("%Y-%m-%d %H:%M")
             else:
                 return None
         except (ValueError, TypeError) as e:

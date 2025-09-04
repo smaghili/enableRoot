@@ -7,6 +7,7 @@ import json
 from config.config import Config
 from config.interfaces import IMessageHandler
 from utils.date_converter import DateConverter
+from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
 try:
     import jdatetime
@@ -346,7 +347,8 @@ class ReminderCallbackHandler(IMessageHandler):
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
                 kb = MenuFactory.create_main_menu(lang, self.message_handler.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
                 calendar_type = data["settings"].get("calendar", "miladi")
-                display_time = self.date_converter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type, data['settings']['timezone'])
+                utc_time = edit_result.get("time", original["time"])
+                display_time = TimezoneManager.format_for_display(utc_time, data['settings']['timezone'], calendar_type)
                 await callback_query.message.delete()
                 await callback_query.message.answer(
                     self.t(lang, "edit_success_details").format(
@@ -368,8 +370,7 @@ class ReminderCallbackHandler(IMessageHandler):
                         "timezone": reminder.get("timezone", self.config.default_timezone),
                         "repeat": reminder.get("repeat", self.config.default_repeat)
                     }
-                    corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
-                    reminder_data["time"] = corrected_time
+                    reminder_data["time"] = reminder_data["time"]
                     meta = None
                     try:
                         if reminder.get("category") == "birthday" and reminder.get("specific_date"):
@@ -403,8 +404,7 @@ class ReminderCallbackHandler(IMessageHandler):
                     "timezone": pending_data.get("timezone", self.config.default_timezone),
                     "repeat": pending_data.get("repeat", self.config.default_repeat)
                 }
-                corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
-                reminder_data["time"] = corrected_time
+                reminder_data["time"] = reminder_data["time"]
                 meta = None
                 try:
                     if pending_data.get("category") == "birthday" and pending_data.get("specific_date"):

@@ -11,10 +11,8 @@ class DateConverter:
         try:
             dt = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
             if timezone:
-                sign = 1 if timezone.startswith("+") else -1
-                hours, minutes = timezone[1:].split(":")
-                tz_offset = datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
-                dt = dt + tz_offset
+                from .timezone_manager import TimezoneManager
+                dt = TimezoneManager.utc_to_local(date_str, timezone)
             if calendar_type == "shamsi":
                 date_part = self.date_parser.format_for_display(dt, "shamsi")
                 return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"
@@ -22,7 +20,7 @@ class DateConverter:
                 date_part = self.date_parser.format_for_display(dt, "hijri")
                 return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"
             else:
-                return date_str
+                return dt.strftime("%Y-%m-%d %H:%M")
         except Exception:
             return date_str
 

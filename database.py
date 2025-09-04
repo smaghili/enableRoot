@@ -6,9 +6,8 @@ from urllib.parse import urlparse
 
 
 def _parse_tz(tz: str) -> datetime.timedelta:
-    sign = 1 if tz.startswith("+") else -1
-    hours, minutes = tz[1:].split(":")
-    return datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
+    from utils.timezone_manager import TimezoneManager
+    return TimezoneManager.parse_timezone(tz)
 
 
 class Database:
@@ -77,9 +76,8 @@ class Database:
 
     def add(self, user_id, category, content, time, timezone, repeat, status="active", meta=None):
         with self.lock, self.conn:
-            dt_local = datetime.datetime.strptime(time, "%Y-%m-%d %H:%M")
-            dt_utc = dt_local - _parse_tz(timezone)
-            time_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
+            # time is already in UTC from time_calculator
+            time_utc = time
 
             cursor = self.conn.execute(
                 "insert into reminders(user_id,category,content,time,timezone,repeat,status,meta) values(?,?,?,?,?,?,?,?)",
@@ -141,18 +139,7 @@ class Database:
             )
             rows = cur.fetchall()
             cur.close()
-
-            result = []
-            for row in rows:
-                rid, cat, content, time_utc, tz, repeat, status_val = row
-                try:
-                    dt_utc = datetime.datetime.strptime(time_utc, "%Y-%m-%d %H:%M")
-                    dt_local = dt_utc + _parse_tz(tz)
-                    time_local = dt_local.strftime("%Y-%m-%d %H:%M")
-                    result.append((rid, cat, content, time_local, tz, repeat, status_val))
-                except (ValueError, TypeError):
-                    result.append(row)
-            return result
+            return rows
 
     def update_status(self, reminder_id, status):
         with self.lock, self.conn:
