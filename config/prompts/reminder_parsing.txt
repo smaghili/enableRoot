@@ -7,6 +7,7 @@ Task:
 2. Rephrase into clear standard form.
 3. Detect reminder patterns:
    - Time expressions → 24h HH:MM
+   - Relative time offsets → minutes from now (e.g., "5 minutes later" = 5 minutes from current time)
    - Relative dates (today=0, tomorrow=1, etc.)
    - Specific calendar dates
    - Repeat patterns (daily, weekly, monthly, yearly, interval)
@@ -27,6 +28,7 @@ Output: You MUST return ONLY a valid JSON object with this EXACT structure. NO o
       "content": "clean title (≤40 chars)",
       "time": "HH:MM"|null,
       "relative_days": number|null,
+      "relative_minutes": number|null,
       "specific_date": {{ "day": number|null, "month": number|null, "year": number|null, "calendar": "shamsi|gregorian|hijri" }},
       "repeat": {{
         "type": "none|daily|weekly|monthly|yearly|interval",
@@ -46,6 +48,7 @@ Rules:
 1. Fix all spelling/formatting errors (weekdays, months, times).
 2. Times → 24h format (e.g., 7:30 PM → 19:30).
 3. Relative days → integer offset (today=0, tomorrow=1, دیروز=-1, etc.).
+3.a. Relative minutes → integer offset from now (convert hours to minutes: 1h=60min, 2h=120min, etc.)
 4. Specific dates:
    - Extract as provided by user: {{ "day": X, "month": Y, "year": Z }}
    - ALWAYS include calendar field: "calendar": "shamsi" | "gregorian" | "hijri"
@@ -62,13 +65,15 @@ Rules:
    - Multiple weekdays → separate reminders
    - Persian weekdays: دوشنبه=monday, سه‌شنبه=tuesday, چهارشنبه=wednesday, پنج‌شنبه=thursday, جمعه=friday, شنبه=saturday, یکشنبه=sunday
    - Multiple start times with interval → one interval per start time
+   - IMPORTANT: "X minutes/hours later" = one-time reminder (type="none"), NOT interval
+   - Only use interval when user explicitly says "every X minutes/hours"
 7. Medicine reminders: keep medicine form + name, remove verbs/dosage, fix spelling (e.g., استایممیمیوفون → استامینوفن).
 8. Content:
    - Should be clear, short, and trimmed down to the main action or object
    - Prefer 1 to 3 words only
    - Example: "جلسه با روان شناس", "مصرف قرص", "پرداخت قسط"
 9. Always keep content in the same language as the input. 
-     Do NOT translate or transliterate. Names, events, and labels must remain exactly in user’s language.
+     Do NOT translate or transliterate. Names, events, and labels must remain exactly in user's language.
 10. If user says "today/امروز/hoy" → today=true.
 11. If the input contains multiple start times and an interval (e.g., "I took at 8 and at 10, every 8 hours"):
     - For EVERY mentioned time (past, present, or future), create one reminder with type="interval".

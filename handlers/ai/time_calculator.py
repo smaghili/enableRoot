@@ -77,6 +77,10 @@ class TimeCalculator:
         if specific_date and any(specific_date.get(k) is not None for k in ("day", "month", "year")):
             return self._calculate_specific_date_time(reminder, specific_date, user_calendar, now)
         
+        relative_minutes = reminder.get("relative_minutes")
+        if relative_minutes is not None:
+            return self._calculate_relative_minutes_time(reminder, relative_minutes, now)
+        
         relative_days = reminder.get("relative_days")
         if relative_days is not None:
             return self._calculate_relative_days_time(reminder, relative_days, user_calendar, now)
@@ -146,6 +150,17 @@ class TimeCalculator:
     def _calculate_relative_days_time(self, reminder: dict, relative_days: int, user_calendar: str, now: datetime.datetime) -> str:
         self.logger.info(f"_calculate_relative_days_time called with relative_days={relative_days}")
         time_str = reminder.get("time")
+        if relative_days == 0 and time_str:
+            try:
+                time_parts = time_str.split(":")
+                if len(time_parts) == 2:
+                    hour, minute = int(time_parts[0]), int(time_parts[1])
+                    if hour == 0 and minute > 0:
+                        target_date = now + datetime.timedelta(minutes=minute)
+                        return self._convert_to_utc(target_date)
+            except (ValueError, IndexError):
+                pass
+        
         target_hour, target_minute = self._get_target_time(time_str, now)
         target_date = now + datetime.timedelta(days=relative_days)
         target_date = target_date.replace(hour=target_hour, minute=target_minute)
@@ -155,6 +170,10 @@ class TimeCalculator:
         self.logger.info(f"repeat_data after processing: {repeat_data}")
         if isinstance(repeat_data, dict) and repeat_data.get("type") == "interval":
             return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now, start_date=target_date)
+        return self._convert_to_utc(target_date)
+    
+    def _calculate_relative_minutes_time(self, reminder: dict, relative_minutes: int, now: datetime.datetime) -> str:
+        target_date = now + datetime.timedelta(minutes=relative_minutes)
         return self._convert_to_utc(target_date)
     
     def _calculate_monthly_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, user_calendar: str, now: datetime.datetime) -> str:
@@ -194,4 +213,20 @@ class TimeCalculator:
             base_time = start_date.replace(hour=target_hour, minute=target_minute)
         else:
             base_time = now.replace(hour=target_hour, minute=target_minute)
+        if base_time <= now and repeat_data.get("type") == "interval":
+            value = repeat_data.get("value", 0)
+            unit = repeat_data.get("unit", "minutes")
+            if unit == "hours" and value > 0:
+                diff_hours = int((now - base_time).total_seconds() / 3600)
+                periods_passed = (diff_hours // value) + 1
+                base_time = base_time + datetime.timedelta(hours=periods_passed * value)
+            elif unit == "minutes" and value > 0:
+                diff_minutes = int((now - base_time).total_seconds() / 60)
+                periods_passed = (diff_minutes // value) + 1
+                base_time = base_time + datetime.timedelta(minutes=periods_passed * value)
+            elif unit == "days" and value > 0:
+                diff_days = (now - base_time).days
+                periods_passed = (diff_days // value) + 1
+                base_time = base_time + datetime.timedelta(days=periods_passed * value)
+        
         return self._convert_to_utc(base_time)
