@@ -2,7 +2,6 @@ import datetime
 import json
 import logging
 from typing import Dict, Any
-import pytz
 from utils.date_parser import DateParser
 
 try:
