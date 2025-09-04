@@ -1,4 +1,5 @@
 import logging
+import json
 from aiogram import Bot
 
 logger = logging.getLogger(__name__)
@@ -10,8 +11,16 @@ class LogManager:
         self.storage = storage
         self.log_channel_id = config.log_channel_id if hasattr(config, 'log_channel_id') else None
 
+    def _get_current_log_channel(self):
+        try:
+            with open("config/config.json", "r") as f:
+                config_data = json.load(f)
+            return config_data.get("bot", {}).get("log_channel_id")
+        except Exception:
+            return self.config.log_channel_id if hasattr(self.config, 'log_channel_id') else None
+
     async def send_reminder_log(self, reminder_id, user_id, category, content, reminder_type="created"):
-        log_channel_id = self.config.log_channel_id
+        log_channel_id = self._get_current_log_channel()
         if not log_channel_id:
             return
         
@@ -51,6 +60,8 @@ class LogManager:
             bot_info = await self.bot.get_me()
             bot_username = f"@{bot_info.username}" if bot_info.username else "Bot"
             
+            reminder_type_hashtag = f"#{reminder_type}" if reminder_type else ""
+            
             log_message = f"""{content}
 {emoji} {bot_username}
 👤 name: {user_name}
@@ -59,7 +70,8 @@ class LogManager:
 🉐 language: {language}
 📅 calendar: {calendar}
 🕐 timezone: {timezone}
-🆔 {bot_username}"""
+🆔 {bot_username}
+{reminder_type_hashtag}"""
 
             await self.bot.send_message(log_channel_id, log_message)
             
@@ -67,7 +79,7 @@ class LogManager:
             logger.error(f"Error sending reminder log: {e}")
 
     async def send_general_log(self, message_text, user_id=None):
-        log_channel_id = self.config.log_channel_id
+        log_channel_id = self._get_current_log_channel()
         if not log_channel_id:
             return
         

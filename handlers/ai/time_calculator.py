@@ -41,11 +41,9 @@ class TimeCalculator:
     def calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
         self._current_timezone = timezone
         if timezone:
-            sign = 1 if timezone.startswith("+") else -1
-            hours, minutes = timezone[1:].split(":")
-            tz_offset = datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
+            from utils.timezone_manager import TimezoneManager
             utc_now = datetime.datetime.utcnow()
-            now = utc_now + tz_offset
+            now = TimezoneManager.utc_to_local(utc_now.strftime("%Y-%m-%d %H:%M"), timezone)
             self.logger.info(f"UTC: {utc_now}, Timezone: {timezone}, Local: {now}")
         else:
             now = datetime.datetime.now()

@@ -213,7 +213,7 @@ class ServiceProvider:
         from config_manager import ConfigManager, AppConfig
         from database import Database
         from json_storage import JSONStorage
-        from ai_handler import AIHandler
+        from handlers.ai.ai_handler import AIHandler
         from reminder_scheduler import ReminderScheduler
         from repeat_handler import RepeatHandler
         from notification_strategies import NotificationStrategyFactory, NotificationContext

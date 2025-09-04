@@ -7,22 +7,20 @@ class DateConverter:
     def __init__(self):
         self.date_parser = DateParser()
     
-    def convert_to_user_calendar(self, date_str: str, calendar_type: str, timezone: str = None) -> str:
+    def convert_to_user_calendar(self, local_datetime_str: str, calendar_type: str, timezone: str = None) -> str:
         try:
-            dt = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
-            if timezone:
-                from .timezone_manager import TimezoneManager
-                dt = TimezoneManager.utc_to_local(date_str, timezone)
+            dt_local = datetime.datetime.strptime(local_datetime_str, "%Y-%m-%d %H:%M")
+            
             if calendar_type == "shamsi":
-                date_part = self.date_parser.format_for_display(dt, "shamsi")
-                return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"
+                date_part = self.date_parser.format_for_display(dt_local, "shamsi")
+                return f"{date_part} {dt_local.hour:02d}:{dt_local.minute:02d}"
             elif calendar_type in ["qamari", "hijri"]:
-                date_part = self.date_parser.format_for_display(dt, "hijri")
-                return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"
+                date_part = self.date_parser.format_for_display(dt_local, "hijri")
+                return f"{date_part} {dt_local.hour:02d}:{dt_local.minute:02d}"
             else:
-                return dt.strftime("%Y-%m-%d %H:%M")
+                return dt_local.strftime("%Y-%m-%d %H:%M")
         except Exception:
-            return date_str
+            return local_datetime_str
 
     @staticmethod
     def _to_shamsi(dt: datetime.datetime) -> str:

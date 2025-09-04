@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, AsyncMock
 import asyncio
-from ai_handler import AIHandler, _parse_tz
+from handlers.ai.ai_handler import AIHandler
 import datetime
 
 

@@ -43,6 +43,8 @@ class AdminLogChannelManager(BaseAdminManager):
             with open("config/config.json", "w") as f:
                 json.dump(config_data, f, indent=2)
             
+            self.config.reload_config()
+            
             await message.answer(self.t(lang, "admin_log_channel_set").format(channel=log_channel_id))
             self.waiting_for_log_channel.discard(user_id)
             await self.return_to_admin_panel(message, lang)

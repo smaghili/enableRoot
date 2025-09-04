@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch, AsyncMock
 import asyncio
-from ai_handler import AIHandler
+from handlers.ai.ai_handler import AIHandler
 
 
 class TestTimezoneHandler(unittest.TestCase):

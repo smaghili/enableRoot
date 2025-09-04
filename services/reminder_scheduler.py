@@ -142,7 +142,12 @@ class ReminderScheduler(IScheduler):
                     "select count(*) from reminders where user_id=? and category='installment_retry' and content like ?",
                     (uid, f"%{rid}%")
                 )
-                retry_count = cur.fetchone()[0] if cur.fetchone() else 0
+                result = cur.fetchone()
+                retry_count = result[0] if result else 0
+                
+                cur.execute("select timezone from reminders where id=?", (rid,))
+                tz_row = cur.fetchone()
+                tz = tz_row[0] if tz_row else "+00:00"
                 cur.close()
             
             if retry_count < 3:
@@ -154,13 +159,13 @@ class ReminderScheduler(IScheduler):
                     "installment_retry", 
                     f"Retry #{retry_count + 1} for reminder {rid}",
                     next_day.strftime("%Y-%m-%d %H:%M"),
-                    "+00:00",
+                    tz,
                     '{"type": "none"}'
                 )
                 self.logger.info(f"Created installment retry {retry_count + 1} for reminder {rid}")
             else:
                 if repeat != "none":
-                    new_time = self._next_time(time_str, repeat, "+00:00")
+                    new_time = self._next_time(time_str, repeat, tz)
                     if new_time:
                         self.db.update_time(rid, new_time)
                         self.logger.info(f"Updated installment reminder {rid} to next cycle: {new_time}")
@@ -219,14 +224,40 @@ class ReminderScheduler(IScheduler):
     def _next_time(self, time_str: str, repeat: str, timezone: str = "+00:00") -> Optional[str]:
         try:
             dt_utc = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-            sign = 1 if timezone.startswith("+") else -1
-            hours, minutes = timezone[1:].split(":")
-            tz_offset = datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
-            dt_local = dt_utc + tz_offset
+            from utils.timezone_manager import TimezoneManager
+            dt_local = TimezoneManager.utc_to_local(time_str, timezone)
             repeat_pattern = self.repeat_handler.from_json(repeat)
-            next_dt_local = self.repeat_handler.calculate_next_time(dt_local, repeat_pattern)
+            
+            now_utc = datetime.datetime.utcnow()
+            now_local = TimezoneManager.utc_to_local(now_utc.strftime("%Y-%m-%d %H:%M"), timezone)
+            
+            if dt_local > now_local:
+                next_dt_utc = TimezoneManager.local_to_utc(dt_local.strftime("%Y-%m-%d %H:%M"), timezone)
+                return next_dt_utc.strftime("%Y-%m-%d %H:%M")
+            
+            next_dt_local = dt_local
+            
+            if hasattr(repeat_pattern, 'type') and repeat_pattern.type == "interval":
+                value = getattr(repeat_pattern, 'value', 0) or getattr(repeat_pattern, 'minutes', 0)
+                unit = getattr(repeat_pattern, 'unit', 'minutes')
+                
+                if (unit == "minutes" or unit == "minute") and value > 0:
+                    diff_minutes = int((now_local - dt_local).total_seconds() / 60)
+                    periods_passed = (diff_minutes // value) + 1
+                    next_dt_local = dt_local + datetime.timedelta(minutes=periods_passed * value)
+                else:
+                    while next_dt_local <= now_local:
+                        next_dt_local = self.repeat_handler.calculate_next_time(next_dt_local, repeat_pattern)
+                        if not next_dt_local:
+                            return None
+            else:
+                while next_dt_local <= now_local:
+                    next_dt_local = self.repeat_handler.calculate_next_time(next_dt_local, repeat_pattern)
+                    if not next_dt_local:
+                        return None
+            
             if next_dt_local:
-                next_dt_utc = next_dt_local - tz_offset
+                next_dt_utc = TimezoneManager.local_to_utc(next_dt_local.strftime("%Y-%m-%d %H:%M"), timezone)
                 return next_dt_utc.strftime("%Y-%m-%d %H:%M")
             else:
                 return None

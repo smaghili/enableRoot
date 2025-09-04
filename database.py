@@ -5,9 +5,6 @@ import os
 from urllib.parse import urlparse
 
 
-def _parse_tz(tz: str) -> datetime.timedelta:
-    from utils.timezone_manager import TimezoneManager
-    return TimezoneManager.parse_timezone(tz)
 
 
 class Database:
@@ -86,20 +83,21 @@ class Database:
             reminder_id = cursor.lastrowid
             if category == "birthday" and repeat == "yearly":
                 birthday_8am = dt_local.replace(hour=8, minute=0, second=0, microsecond=0)
-                birthday_8am_utc = birthday_8am - _parse_tz(timezone)
+                from utils.timezone_manager import TimezoneManager
+                birthday_8am_utc = birthday_8am - TimezoneManager.parse_timezone(timezone)
                 self.conn.execute(
                     "update reminders set time=? where id=?",
                     (birthday_8am_utc.strftime("%Y-%m-%d %H:%M"), reminder_id)
                 )
                 week_before = dt_local.replace(hour=0, minute=1, second=0, microsecond=0) - datetime.timedelta(days=7)
-                week_before_utc = week_before - _parse_tz(timezone)
+                week_before_utc = week_before - TimezoneManager.parse_timezone(timezone)
                 self.conn.execute(
                     "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
                     (user_id, "birthday_pre_week", content,
                      week_before_utc.strftime("%Y-%m-%d %H:%M"), timezone, "yearly", status),
                 )
                 three_days_before = dt_local.replace(hour=0, minute=1, second=0, microsecond=0) - datetime.timedelta(days=3)
-                three_days_before_utc = three_days_before - _parse_tz(timezone)
+                three_days_before_utc = three_days_before - TimezoneManager.parse_timezone(timezone)
                 self.conn.execute(
                     "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
                     (user_id, "birthday_pre_three", content,
@@ -147,24 +145,14 @@ class Database:
 
     def update_time(self, reminder_id, new_time):
         with self.lock, self.conn:
-            cur = self.conn.cursor()
-            cur.execute("select timezone from reminders where id=?", (reminder_id,))
-            row = cur.fetchone()
-            cur.close()
-
-            if row:
-                tz = row[0]
-                dt_local = datetime.datetime.strptime(new_time, "%Y-%m-%d %H:%M")
-                dt_utc = dt_local - _parse_tz(tz)
-                time_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
-                self.conn.execute("update reminders set time=? where id=?", (time_utc, reminder_id))
-            else:
-                self.conn.execute("update reminders set time=? where id=?", (new_time, reminder_id))
+            # new_time is already in UTC format from scheduler
+            self.conn.execute("update reminders set time=? where id=?", (new_time, reminder_id))
     
     def update_reminder(self, reminder_id, category, content, time, timezone, repeat):
         with self.lock, self.conn:
             dt_local = datetime.datetime.strptime(time, "%Y-%m-%d %H:%M")
-            dt_utc = dt_local - _parse_tz(timezone)
+            from utils.timezone_manager import TimezoneManager
+            dt_utc = dt_local - TimezoneManager.parse_timezone(timezone)
             time_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
 
             self.conn.execute(
@@ -189,9 +177,7 @@ class Database:
                 try:
                     dt_utc = datetime.datetime.strptime(time_utc_str, "%Y-%m-%d %H:%M")
                     if dt_utc <= now_utc:
-                        dt_local = dt_utc + _parse_tz(tz)
-                        time_local_str = dt_local.strftime("%Y-%m-%d %H:%M")
-                        items.append((rid, uid, cat, content, time_local_str, tz, repeat))
+                        items.append((rid, uid, cat, content, time_utc_str, tz, repeat))
                 except (ValueError, TypeError):
                     continue
             cur.close()
