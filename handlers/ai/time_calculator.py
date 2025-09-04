@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 from typing import Dict, Any
+from zoneinfo import ZoneInfo
 from utils.date_parser import DateParser
 
 try:
@@ -32,7 +33,8 @@ class TimeCalculator:
         return now.hour, now.minute
     
     def calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
-        now = datetime.datetime.now()
+        user_tz = ZoneInfo(timezone) if timezone else None
+        now = datetime.datetime.now(user_tz)
         
         repeat_data = reminder.get("repeat", {})
         if isinstance(repeat_data, str):
