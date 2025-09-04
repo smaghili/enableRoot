@@ -33,8 +33,13 @@ class TimeCalculator:
         return now.hour, now.minute
     
     def calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
-        user_tz = pytz.timezone(timezone) if timezone else None
-        now = datetime.datetime.now(user_tz)
+        if timezone:
+            sign = 1 if timezone.startswith("+") else -1
+            hours, minutes = timezone[1:].split(":")
+            tz_offset = datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
+            now = datetime.datetime.utcnow() + tz_offset
+        else:
+            now = datetime.datetime.now()
         
         repeat_data = reminder.get("repeat", {})
         if isinstance(repeat_data, str):
