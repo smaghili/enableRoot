@@ -75,15 +75,93 @@ install_pip() {
     fi
 }
 
-install_dependencies() {
+choose_installation_method() {
+    echo
+    echo "📦 Choose installation method:"
+    echo "1) Virtual Environment (Recommended - Isolated dependencies)"
+    echo "2) System Python (Direct installation)"
+    echo -n "Enter your choice (1-2): "
+    read install_choice
+    
+    case $install_choice in
+        1)
+            USE_VENV=true
+            print_status "Using virtual environment installation"
+            ;;
+        2)
+            USE_VENV=false
+            print_status "Using system Python installation"
+            ;;
+        *)
+            print_warning "Invalid choice. Using virtual environment (default)"
+            USE_VENV=true
+            ;;
+    esac
+}
+
+setup_dependencies() {
+    if [ "$USE_VENV" = true ]; then
+        setup_virtual_environment
+    else
+        install_system_dependencies
+    fi
+}
+
+setup_virtual_environment() {
+    print_status "Setting up virtual environment..."
+    cd ..
+    if [ ! -d "venv" ]; then
+        print_status "Creating virtual environment..."
+        python3 -m venv venv
+        if [ $? -ne 0 ]; then
+            print_error "Failed to create virtual environment"
+            exit 1
+        fi
+    fi
+    
+    print_status "Activating virtual environment..."
+    source venv/bin/activate
+    
+    print_status "Upgrading pip..."
+    pip install --upgrade pip
+    
     print_status "Installing dependencies..."
-    if [ -f "../requirements.txt" ]; then
-        python3 -m pip install --user --break-system-packages -r ../requirements.txt
-        print_status "Dependencies installed successfully"
+    if [ -f "requirements.txt" ]; then
+        pip install -r requirements.txt
+        if [ $? -ne 0 ]; then
+            print_error "Failed to install dependencies"
+            exit 1
+        fi
+        print_status "Dependencies installed successfully in virtual environment"
     else
         print_error "requirements.txt not found!"
         exit 1
     fi
+    
+    # Verify Python executable in venv
+    if [ ! -f "venv/bin/python" ]; then
+        print_error "Virtual environment Python executable not found"
+        exit 1
+    fi
+    
+    cd scripts
+}
+
+install_system_dependencies() {
+    print_status "Installing dependencies with system Python..."
+    cd ..
+    if [ -f "requirements.txt" ]; then
+        python3 -m pip install --user --break-system-packages -r requirements.txt
+        if [ $? -ne 0 ]; then
+            print_error "Failed to install dependencies"
+            exit 1
+        fi
+        print_status "Dependencies installed successfully with system Python"
+    else
+        print_error "requirements.txt not found!"
+        exit 1
+    fi
+    cd scripts
 }
 
 get_secure_input() {
@@ -198,6 +276,28 @@ create_systemd_service() {
         SERVICE_FILE="/etc/systemd/system/telegram-reminder-bot.service"
         CURRENT_DIR=$(cd .. && pwd)
         CURRENT_USER=$(whoami)
+        
+        if [ "$USE_VENV" = true ]; then
+            # Virtual environment setup
+            if [ ! -f "$CURRENT_DIR/venv/bin/python" ]; then
+                print_error "Virtual environment not found at $CURRENT_DIR/venv/bin/python"
+                exit 1
+            fi
+            PYTHON_EXEC="$CURRENT_DIR/venv/bin/python"
+            PATH_ENV="$CURRENT_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin"
+            
+            print_status "Using virtual environment Python: $PYTHON_EXEC"
+        else
+            # System Python setup
+            PYTHON_EXEC="/usr/bin/python3"
+            PATH_ENV="/usr/local/bin:/usr/bin:/bin"
+            
+            print_status "Using system Python: $PYTHON_EXEC"
+        fi
+        
+        print_status "Creating service file at $SERVICE_FILE"
+        print_status "Bot directory: $CURRENT_DIR"
+        
         sudo tee $SERVICE_FILE > /dev/null << EOF
 [Unit]
 Description=Telegram Reminder Bot
@@ -207,24 +307,50 @@ After=network.target
 Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$CURRENT_DIR
-Environment=PATH=$CURRENT_DIR/venv/bin
-ExecStart=$CURRENT_DIR/venv/bin/python $CURRENT_DIR/bot.py
+Environment=PATH=$PATH_ENV
+Environment=PYTHONPATH=$CURRENT_DIR
+ExecStart=$PYTHON_EXEC bot.py
 Restart=always
 RestartSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target
 EOF
+        
+        # Test the command manually first
+        print_status "Testing bot execution..."
+        cd ..
+        if ! $PYTHON_EXEC -c "import sys; print('Python executable works'); sys.exit(0)"; then
+            print_error "Python executable is not working properly"
+            exit 1
+        fi
+        cd scripts
+        
         sudo systemctl daemon-reload
         sudo systemctl enable telegram-reminder-bot.service
         sudo systemctl start telegram-reminder-bot.service
-        print_status "Systemd service created, enabled and started"
-        print_status "Bot is now running automatically"
-        print_status "Check status with: sudo systemctl status telegram-reminder-bot"
+        
+        # Wait a moment and check status
+        sleep 2
+        if sudo systemctl is-active --quiet telegram-reminder-bot.service; then
+            print_status "Systemd service created, enabled and started successfully"
+            print_status "Bot is now running automatically"
+            print_status "Check status with: sudo systemctl status telegram-reminder-bot"
+        else
+            print_warning "Service was created but may not be running properly"
+            print_status "Check logs with: sudo journalctl -u telegram-reminder-bot -f"
+            print_status "Check status with: sudo systemctl status telegram-reminder-bot"
+        fi
     else
         print_status "Starting bot manually..."
         cd ..
-        nohup python3 bot.py > bot.log 2>&1 &
+        if [ "$USE_VENV" = true ]; then
+            nohup ./venv/bin/python bot.py > bot.log 2>&1 &
+        else
+            nohup python3 bot.py > bot.log 2>&1 &
+        fi
         print_status "Bot started in background (PID: $!)"
         print_status "Logs are being written to bot.log"
     fi
@@ -269,7 +395,8 @@ main() {
     print_status "Starting installation process..."
     install_python
     install_pip
-    install_dependencies
+    choose_installation_method
+    setup_dependencies
     collect_config
     create_config_file
     create_directories

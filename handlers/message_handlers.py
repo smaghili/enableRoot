@@ -289,13 +289,15 @@ class ReminderMessageHandler(IMessageHandler):
                 age_suffix = ""
                 try:
                     if reminder.get('category') == 'birthday' and reminder.get('specific_date'):
-                        from utils.date_parser import DateParser
-                        dp = DateParser()
-                        birth_dt = dp.convert_to_gregorian(reminder.get('specific_date'))
-                        if birth_dt:
-                            scheduled_dt = datetime.datetime.strptime(reminder['time'], "%Y-%m-%d %H:%M")
-                            age_years = scheduled_dt.year - birth_dt.year - ((scheduled_dt.month, scheduled_dt.day) < (birth_dt.month, birth_dt.day))
-                            age_suffix = self.t(lang, "age_suffix", years=age_years)
+                        specific_date = reminder.get('specific_date')
+                        if specific_date.get('year') is not None:
+                            from utils.date_parser import DateParser
+                            dp = DateParser()
+                            birth_dt = dp.convert_to_gregorian(specific_date)
+                            if birth_dt:
+                                scheduled_dt = datetime.datetime.strptime(reminder['time'], "%Y-%m-%d %H:%M")
+                                age_years = scheduled_dt.year - birth_dt.year - ((scheduled_dt.month, scheduled_dt.day) < (birth_dt.month, birth_dt.day))
+                                age_suffix = self.t(lang, "age_suffix", years=age_years)
                 except Exception:
                     age_suffix = ""
                 summary_lines.append(f"{i}. {reminder['content']} @ {display_time} ({category_text}{age_suffix}) - {repeat_text}")
