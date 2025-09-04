@@ -538,13 +538,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 f"🎉 {self.t(lang, 'setup_complete')}"
             )
             
-            # Show main menu
-            kb = ReplyKeyboardMarkup(keyboard=[
-                [KeyboardButton(text=self.t(lang, "btn_new"))],
-                [KeyboardButton(text=self.t(lang, "btn_delete")), KeyboardButton(text=self.t(lang, "btn_edit"))],
-                [KeyboardButton(text=self.t(lang, "btn_list"))],
-                [KeyboardButton(text=self.t(lang, "btn_settings")), KeyboardButton(text=self.t(lang, "btn_stats"))]
-            ], resize_keyboard=True)
+            kb = MenuFactory.create_main_menu(lang, self.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
             await callback_query.message.answer(self.t(lang, "menu"), reply_markup=kb)
             await callback_query.answer()
         except Exception as e:
