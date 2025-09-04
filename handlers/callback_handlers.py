@@ -346,7 +346,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
                 kb = MenuFactory.create_main_menu(lang, self.message_handler.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
                 calendar_type = data["settings"].get("calendar", "miladi")
-                display_time = self.date_converter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
+                display_time = self.date_converter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type, user_data['settings']['timezone'])
                 await callback_query.message.delete()
                 await callback_query.message.answer(
                     self.t(lang, "edit_success_details").format(

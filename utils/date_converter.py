@@ -7,9 +7,14 @@ class DateConverter:
     def __init__(self):
         self.date_parser = DateParser()
     
-    def convert_to_user_calendar(self, date_str: str, calendar_type: str) -> str:
+    def convert_to_user_calendar(self, date_str: str, calendar_type: str, timezone: str = None) -> str:
         try:
             dt = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
+            if timezone:
+                sign = 1 if timezone.startswith("+") else -1
+                hours, minutes = timezone[1:].split(":")
+                tz_offset = datetime.timedelta(hours=sign * int(hours), minutes=sign * int(minutes))
+                dt = dt + tz_offset
             if calendar_type == "shamsi":
                 date_part = self.date_parser.format_for_display(dt, "shamsi")
                 return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"

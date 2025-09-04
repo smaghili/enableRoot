@@ -148,7 +148,7 @@ async def list_reminders(message: Message):
             for rid, cat, content, time, tz, repeat, status in reminders:
                 emoji = config.emoji_mapping.get(cat, "⏰")
                 safe_content = message_handler.sanitize_input(str(content))[:50]
-                display_time = date_converter.convert_to_user_calendar(time, calendar_type)
+                display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
                 lines.append(f"{rid}. {emoji} {safe_content} @ {display_time}")
             await message.answer("\n".join(lines))
     except Exception as e:
@@ -175,7 +175,7 @@ async def show_reminders_list(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = date_converter.convert_to_user_calendar(time, calendar_type)
+        display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
         lines.append(message_handler.t(lang, "reminder_id").format(id=rid))
         lines.append(f"{emoji} {content}")
         lines.append(message_handler.t(lang, "reminder_time").format(time=display_time))
@@ -233,7 +233,7 @@ async def show_delete_reminders(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = date_converter.convert_to_user_calendar(time, calendar_type)
+        display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
         display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
         button_text = f"🗑 {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"delete_confirm_{rid}")])
@@ -261,7 +261,7 @@ async def show_edit_reminders(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = date_converter.convert_to_user_calendar(time, calendar_type)
+        display_time = date_converter.convert_to_user_calendar(time, calendar_type, tz)
         display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
         button_text = f"✏️ {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"edit_select_{rid}")])
