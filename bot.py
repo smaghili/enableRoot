@@ -48,6 +48,7 @@ log_manager = LogManager(bot, config, storage)
 ai = AIHandler(config.openrouter_key, config.ai_model)
 scheduler = ReminderScheduler(db, storage, bot, log_manager)
 repeat_handler = RepeatHandler()
+date_converter = DateConverter()
 base = os.path.dirname(__file__)
 
 if os.path.exists(config.database_path):
@@ -101,11 +102,11 @@ async def start_message(message: Message):
 
     
     data = storage.load(user_id)
-    is_new_user = not data["settings"].get("setup_complete", False)
+    is_new_user = not data.get("settings", {}).get("setup_complete", False)
     
     if config.forced_join.get("enabled", False) and not is_new_user:
         if not await admin_handler.check_user_membership(user_id):
-            lang = data["settings"]["language"]
+            lang = data.get("settings", {}).get("language", "fa")
             kb = await admin_handler.get_join_keyboard(lang)
             await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
             return
@@ -119,7 +120,7 @@ async def start_message(message: Message):
                 reply_markup=kb
             )
         else:
-            lang = data["settings"]["language"]
+            lang = data.get("settings", {}).get("language", "fa")
             await message.answer(message_handler.t(lang, "start"))
             
             kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
@@ -137,8 +138,8 @@ async def list_reminders(message: Message):
         return
     try:
         data = storage.load(user_id)
-        lang = data["settings"]["language"]
-        calendar_type = data["settings"].get("calendar", "miladi")
+        lang = data.get("settings", {}).get("language", "fa")
+        calendar_type = data.get("settings", {}).get("calendar", "miladi")
         reminders = db.list(user_id)
         if not reminders:
             await message.answer(message_handler.t(lang, "no_reminders"))
@@ -147,7 +148,7 @@ async def list_reminders(message: Message):
             for rid, cat, content, time, tz, repeat, status in reminders:
                 emoji = config.emoji_mapping.get(cat, "⏰")
                 safe_content = message_handler.sanitize_input(str(content))[:50]
-                display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
+                display_time = date_converter.convert_to_user_calendar(time, calendar_type)
                 lines.append(f"{rid}. {emoji} {safe_content} @ {display_time}")
             await message.answer("\n".join(lines))
     except Exception as e:
@@ -160,8 +161,8 @@ async def show_reminders_list(message: Message):
         return
     try:
         data = storage.load(user_id)
-        lang = data["settings"]["language"]
-        calendar_type = data["settings"].get("calendar", "miladi")
+        lang = data.get("settings", {}).get("language", "fa")
+        calendar_type = data.get("settings", {}).get("calendar", "miladi")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_reminders_list for user {user_id}: {e}")
@@ -174,7 +175,7 @@ async def show_reminders_list(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
+        display_time = date_converter.convert_to_user_calendar(time, calendar_type)
         lines.append(message_handler.t(lang, "reminder_id").format(id=rid))
         lines.append(f"{emoji} {content}")
         lines.append(message_handler.t(lang, "reminder_time").format(time=display_time))
@@ -189,7 +190,7 @@ async def delete_reminder(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
         parts = message.text.split()
         if len(parts) > 1:
             try:
@@ -218,8 +219,8 @@ async def show_delete_reminders(message: Message):
         return
     try:
         data = storage.load(user_id)
-        lang = data["settings"]["language"]
-        calendar_type = data["settings"].get("calendar", "miladi")
+        lang = data.get("settings", {}).get("language", "fa")
+        calendar_type = data.get("settings", {}).get("calendar", "miladi")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_delete_reminders for user {user_id}: {e}")
@@ -232,7 +233,7 @@ async def show_delete_reminders(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
+        display_time = date_converter.convert_to_user_calendar(time, calendar_type)
         display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
         button_text = f"🗑 {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"delete_confirm_{rid}")])
@@ -246,8 +247,8 @@ async def show_edit_reminders(message: Message):
         return
     try:
         data = storage.load(user_id)
-        lang = data["settings"]["language"]
-        calendar_type = data["settings"].get("calendar", "miladi")
+        lang = data.get("settings", {}).get("language", "fa")
+        calendar_type = data.get("settings", {}).get("calendar", "miladi")
         reminders = db.list(user_id)
     except Exception as e:
         logger.error(f"Error in show_edit_reminders for user {user_id}: {e}")
@@ -260,7 +261,7 @@ async def show_edit_reminders(message: Message):
         emoji = config.emoji_mapping.get(cat, "⏰")
         repeat_pattern = repeat_handler.from_json(repeat)
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        display_time = DateConverter.convert_to_user_calendar(time, calendar_type)
+        display_time = date_converter.convert_to_user_calendar(time, calendar_type)
         display_content = content[:config.max_button_length] + "..." if len(content) > config.max_button_length else content
         button_text = f"✏️ {emoji} {display_content}\n📅 {display_time} | 🔄 {repeat_text}"
         buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"edit_select_{rid}")])
@@ -274,7 +275,7 @@ async def show_menu(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
     except Exception as e:
         logger.error(f"Error in show_menu for user {user_id}: {e}")
         return
@@ -292,13 +293,13 @@ async def handle_menu_buttons(message: Message):
     if config.forced_join.get("enabled", False) and not admin_handler.is_admin(user_id):
         if not await admin_handler.check_user_membership(user_id):
             data = storage.load(user_id)
-            lang = data["settings"]["language"]
+            lang = data.get("settings", {}).get("language", "fa")
             kb = await admin_handler.get_join_keyboard(lang)
             await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
             return
     
     try:
-        lang = storage.load(user_id)["settings"]["language"]
+        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
         
         if message.text == message_handler.t(lang, "btn_admin") and admin_handler.is_admin(user_id):
             await admin_handler.show_admin_panel(message)
@@ -416,7 +417,7 @@ async def handle_check_membership(callback_query: CallbackQuery):
     
     if await admin_handler.check_user_membership(user_id):
         data = storage.load(user_id)
-        lang = data["settings"]["language"]
+        lang = data.get("settings", {}).get("language", "fa")
         await callback_query.message.delete()
         await callback_query.message.answer(message_handler.t(lang, "start"))
         
@@ -425,7 +426,7 @@ async def handle_check_membership(callback_query: CallbackQuery):
         await callback_query.answer()
     else:
         data = storage.load(user_id)
-        lang = data["settings"]["language"]
+        lang = data.get("settings", {}).get("language", "fa")
         await callback_query.answer(message_handler.t(lang, "not_member_yet"), show_alert=True)
         try:
             kb = await admin_handler.get_join_keyboard(lang)

@@ -1,22 +1,24 @@
-You are a multilingual AI that extracts reminder patterns from ANY language.
+You are a multilingual AI that extracts reminder patterns from any language.
 
-Your job is to:
-1. Understand and correct natural language input from any language (including typos, grammar issues, and informal speech).
-2. Normalize and rephrase the input into standard, clear expressions.
-3. Detect and extract all reminder-related patterns, including:
-   - Time expressions
-   - Relative dates
+Task:
+1. Normalize and correct input (fix typos, grammar, informal speech).
+1.a. Normalize ALL misspellings and informal variations of weekdays, months, and time expressions into their correct standard form 
+     (e.g., any misspelled "دونشبه", "چهاشنبه", "Fridy", "Wednsday" → should always normalize to the correct weekday).
+2. Rephrase into clear standard form.
+3. Detect reminder patterns:
+   - Time expressions → 24h HH:MM
+   - Relative dates (today=0, tomorrow=1, etc.)
    - Specific calendar dates
-   - Repeat patterns (daily, weekly, monthly, interval, etc.)
-   - Multiple time/day references
-   - Categories based on action/object
-4. Produce a clean and **structured JSON output** (strictly valid) with proper fields.
+   - Repeat patterns (daily, weekly, monthly, yearly, interval)
+   - Multiple days/times
+   - Categories by action/object
+4. Return only valid JSON.
 
 ---
 
 Input: text="{text}"
 
-Output: Return ONLY a valid JSON with this structure (do NOT add any commentary or formatting):
+Output: You MUST return ONLY a valid JSON object with this EXACT structure. NO other text, NO explanations, NO code blocks:
 
 {{
   "reminders": [
@@ -25,7 +27,7 @@ Output: Return ONLY a valid JSON with this structure (do NOT add any commentary 
       "content": "clean title (≤40 chars)",
       "time": "HH:MM"|null,
       "relative_days": number|null,
-      "specific_date": {{ "day": number|null, "month": number|null, "year": number|null }},
+      "specific_date": {{ "day": number|null, "month": number|null, "year": number|null, "calendar": "shamsi|gregorian|hijri" }},
       "repeat": {{
         "type": "none|daily|weekly|monthly|yearly|interval",
         "value": number|null,
@@ -41,40 +43,35 @@ Output: Return ONLY a valid JSON with this structure (do NOT add any commentary 
 ---
 
 Rules:
-1. Normalize and fix any typos or inconsistent formatting before extraction.
-   - Correct all spelling errors in weekdays, months, and time expressions in any language
-2. Time: convert all time expressions (in any language or format) to 24-hour "HH:MM", with leading zeros.
-   - Examples: "7:30 PM" → "19:30", "نیم ساعت بعد از ۳" → "15:30"
-3. Relative dates:
-   - today → 0, tomorrow → 1, "پسفردا" → 2, "سه روز دیگه" → 3, etc.
-   - "پریروز" → -2, "دیروز" → -1
+1. Fix all spelling/formatting errors (weekdays, months, times).
+2. Times → 24h format (e.g., 7:30 PM → 19:30).
+3. Relative days → integer offset (today=0, tomorrow=1, دیروز=-1, etc.).
 4. Specific dates:
-   - "2025/03/15" → {{ "day": 15, "month": 3, "year": 2025 }}
-   - Use original year (do NOT convert to current)
-5. Categories: auto-detect based on content
-6. Repeat patterns:
+   - Extract as provided by user: {{ "day": X, "month": Y, "year": Z }}
+   - ALWAYS include calendar field: "calendar": "shamsi" | "gregorian" | "hijri"
+   - For Persian/Farsi dates (like ۱۳۶۶/۵/۱ or 1366/5/1) → "calendar": "shamsi"
+   - For standard Western dates (like 2024/12/25) → "calendar": "gregorian"  
+   - For Islamic dates → "calendar": "hijri"
+   - DO NOT convert between calendars. Always return exactly what user said, with correct calendar tag.
+   - Conversion to Gregorian or other systems will be handled outside AI.
+5. Auto-detect category from content.
+6. Repeat rules:
    - "every 8 hours" → interval
    - "every Friday" → weekly
-   - "every 5th" / "5 هر ماه" → monthly
-   - "Monday and Wednesday" → generate 2 separate reminders
-   - Persian weekdays: "دوشنبه"=monday, "سه‌شنبه"=tuesday, "چهارشنبه"=wednesday, "پنج‌شنبه"=thursday, "جمعه"=friday, "شنبه"=saturday, "یکشنبه"=sunday
-   - If multiple times mentioned with interval, create only ONE interval reminder per start time
-7. For **medicine** reminders:
-   - Keep medicine form (pill/tablet/syrup/قرص/شربت/کپسول) + cleaned medicine name
-   - Remove verbs like take, eat, drink, بخورم, مصرف کنم
-   - Correct misspelled medicine names (e.g., "استایممیمیوفون" → "استامینوفن")
-   - Remove dosage info
+   - "every 5th" → monthly
+   - Multiple weekdays → separate reminders
+   - Persian weekdays: دوشنبه=monday, سه‌شنبه=tuesday, چهارشنبه=wednesday, پنج‌شنبه=thursday, جمعه=friday, شنبه=saturday, یکشنبه=sunday
+   - Multiple start times with interval → one interval per start time
+7. Medicine reminders: keep medicine form + name, remove verbs/dosage, fix spelling (e.g., استایممیمیوفون → استامینوفن).
 8. Content:
    - Should be clear, short, and trimmed down to the main action or object
-   - Prefer **1 to 3 words only**
+   - Prefer 1 to 3 words only
    - Example: "جلسه با روان شناس", "مصرف قرص", "پرداخت قسط"
-9. If the user mentions "امروز"/"today"/"hoy" etc, set `"today": true`
-10. If input mentions multiple starting times with interval (e.g., "8 AM and 10 AM every 8 hours"), generate one reminder per start time with its own interval pattern
-
----
-
-Critical:
-- Output MUST be a valid JSON array
-- DO NOT include any explanation, markdown, or text before/after JSON
-- Always close all quotes and brackets
-- If multiple days or times are detected, generate SEPARATE reminders
+9. Always keep content in the same language as the input. 
+     Do NOT translate or transliterate. Names, events, and labels must remain exactly in user’s language.
+10. If user says "today/امروز/hoy" → today=true.
+11. If input mentions multiple start times with an interval:
+    - Generate one interval reminder for each start time.
+    - Words that indicate past or relative reference (e.g., "today", "yesterday", "two days ago", "I took", "I did") 
+      only anchor the starting point.
+    - All mentioned start times must inherit the same interval repeat type.

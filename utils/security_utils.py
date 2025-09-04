@@ -30,7 +30,7 @@ def secure_directory_permissions(dir_path: str) -> bool:
 def create_secure_directory(dir_path: str) -> bool:
     try:
         os.makedirs(dir_path, mode=0o700, exist_ok=True)
-        logger.info(f"Created secure directory {dir_path}")
+        logger.info(f"Created secureییییییی directory {dir_path}")
         return True
     except (OSError, IOError) as e:
         logger.error(f"Failed to create secure directory {dir_path}: {e}")

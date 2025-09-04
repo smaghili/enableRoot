@@ -20,7 +20,7 @@ class ReminderValidator:
             "prayer", "shopping", "call", "study", "installment", "bill", "general"
         ]
         
-        if obj["category"] not in valid_categories:
+        if obj.get("category") not in valid_categories:
             obj["category"] = "general"
         
         self._normalize_repeat_field(obj)

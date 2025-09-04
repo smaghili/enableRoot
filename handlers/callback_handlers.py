@@ -26,6 +26,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.admin_handler = admin_handler
         self.log_manager = log_manager
         self.user_request_times = {}
+        self.date_converter = DateConverter()
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
     def _calculate_correct_time(self, reminder_data: dict, user_calendar: str) -> str:
@@ -35,7 +36,7 @@ class ReminderCallbackHandler(IMessageHandler):
             repeat_data = json.loads(repeat_data) if repeat_data.startswith("{") else {"type": repeat_data}
         repeat_type = repeat_data.get("type", "none")
         if repeat_type == "monthly" and "day" in repeat_data:
-            target_day = repeat_data["day"]
+            target_day = repeat_data.get("day", now.day)
             if user_calendar == "shamsi" and jdatetime:
                 shamsi_now = jdatetime.datetime.fromgregorian(datetime=now)
                 current_day = shamsi_now.day
@@ -345,7 +346,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
                 kb = MenuFactory.create_main_menu(lang, self.message_handler.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
                 calendar_type = data["settings"].get("calendar", "miladi")
-                display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
+                display_time = self.date_converter.convert_to_user_calendar(edit_result.get("time", original["time"]), calendar_type)
                 await callback_query.message.delete()
                 await callback_query.message.answer(
                     self.t(lang, "edit_success_details").format(

@@ -2,6 +2,7 @@ import datetime
 import json
 import logging
 from typing import Dict, Any
+from utils.date_parser import DateParser
 
 try:
     from convertdate import persian, islamic
@@ -12,6 +13,7 @@ except ImportError:
 class TimeCalculator:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.date_parser = DateParser()
     
     def parse_time(self, time_str: str) -> tuple:
         if not time_str or time_str is None:
@@ -33,7 +35,7 @@ class TimeCalculator:
         now = datetime.datetime.now()
         
         specific_date = reminder.get("specific_date")
-        if specific_date and isinstance(specific_date, dict):
+        if specific_date and any(v is not None for v in specific_date.values()):
             return self._calculate_specific_date_time(reminder, specific_date, user_calendar, now)
         
         relative_days = reminder.get("relative_days")
@@ -51,13 +53,11 @@ class TimeCalculator:
         
         target_hour, target_minute = self._get_target_time(time_str, now)
         if reminder.get("today", False) or reminder.get("relative_days") == 0:
-            # If it's today and has interval repeat, use interval logic instead of error
             if repeat_type == "interval":
                 return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now)
             
             target_date = now.replace(hour=target_hour, minute=target_minute)
             if target_date <= now:
-                # Never show PAST_DATE_ERROR for interval repeats or birthdays
                 target_date += datetime.timedelta(days=1)
             return target_date.strftime("%Y-%m-%d %H:%M")
         
@@ -77,52 +77,33 @@ class TimeCalculator:
         day = specific_date.get("day")
         month = specific_date.get("month")
         year = specific_date.get("year")
+        calendar_type = specific_date.get("calendar")
+        if not calendar_type:
+            if year and year > 1500:
+                calendar_type = "gregorian"
+            elif year and year > 1300 and year < 1500:
+                calendar_type = "shamsi"
+            else:
+                calendar_type = "gregorian"
+        
         if day and month:
             time_str = reminder.get("time")
             target_hour, target_minute = self._get_target_time(time_str, now)
-            
-            if reminder.get("category") == "birthday" and year:
-                if user_calendar == "shamsi" and persian:
-                    current_shamsi = persian.from_gregorian(now.year, now.month, now.day)
-                    current_year = current_shamsi[0]
-                    try:
-                        gregorian_date = persian.to_gregorian(current_year, month, day)
-                        target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
-                        if target_date < now:
-                            gregorian_date = persian.to_gregorian(current_year + 1, month, day)
-                            target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
-                    except Exception:
-                        return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
-                else:
-                    try:
-                        target_date = datetime.datetime(now.year, month, day, target_hour, target_minute)
-                        if target_date < now:
-                            target_date = datetime.datetime(now.year + 1, month, day, target_hour, target_minute)
-                    except Exception:
-                        return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
-            else:
-                if user_calendar == "shamsi" and persian and year:
-                    try:
-                        gregorian_date = persian.to_gregorian(year, month, day)
-                        target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
-                    except Exception:
-                        return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
-                elif year:
-                    try:
-                        target_date = datetime.datetime(year, month, day, target_hour, target_minute)
-                    except Exception:
-                        return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
-                else:
-                    try:
-                        target_date = datetime.datetime(now.year, month, day, target_hour, target_minute)
-                    except Exception:
-                        return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
-            
-            # Never show PAST_DATE_ERROR for interval repeats or birthdays
-            # For past dates, just move to next occurrence
+            date_data = {
+                "day": day,
+                "month": month,
+                "year": (None if reminder.get("category") == "birthday" else year),
+                "calendar": calendar_type
+            }
+            target_date = self.date_parser.convert_to_gregorian(date_data)
+            if not target_date:
+                return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
+            target_date = target_date.replace(hour=target_hour, minute=target_minute)
+            if reminder.get("category") == "birthday":
+                if target_date < now:
+                    target_date = target_date.replace(year=target_date.year + 1)
             return target_date.strftime("%Y-%m-%d %H:%M")
         
-        # If day or month is None, check if this has interval repeat
         repeat_data = reminder.get("repeat", {})
         if isinstance(repeat_data, str):
             repeat_data = json.loads(repeat_data) if repeat_data.startswith("{") else {"type": repeat_data}
@@ -131,7 +112,6 @@ class TimeCalculator:
             target_hour, target_minute = self._get_target_time(time_str, now)
             return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now)
         
-        # Otherwise use default logic
         time_str = reminder.get("time")
         target_hour, target_minute = self._get_target_time(time_str, now)
         target_date = now.replace(hour=target_hour, minute=target_minute)
@@ -156,51 +136,33 @@ class TimeCalculator:
         return target_date.strftime("%Y-%m-%d %H:%M")
     
     def _calculate_monthly_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, user_calendar: str, now: datetime.datetime) -> str:
-        target_day = repeat_data["day"]
-        if user_calendar == "shamsi" and persian:
-            shamsi_now = persian.from_gregorian(now.year, now.month, now.day)
-            current_day = shamsi_now[2]
-            if target_day <= current_day:
-                if shamsi_now[1] == 12:
-                    gregorian_date = persian.to_gregorian(shamsi_now[0] + 1, 1, target_day)
-                else:
-                    gregorian_date = persian.to_gregorian(shamsi_now[0], shamsi_now[1] + 1, target_day)
+        target_day = repeat_data.get("day", now.day)
+        current_day = now.day
+        if target_day <= current_day:
+            if now.month == 12:
+                next_month = now.replace(year=now.year + 1, month=1, day=target_day, hour=target_hour, minute=target_minute)
             else:
-                gregorian_date = persian.to_gregorian(shamsi_now[0], shamsi_now[1], target_day)
-            target_date = datetime.datetime(gregorian_date[0], gregorian_date[1], gregorian_date[2], target_hour, target_minute)
-            return target_date.strftime("%Y-%m-%d %H:%M")
+                next_month = now.replace(month=now.month + 1, day=target_day, hour=target_hour, minute=target_minute)
         else:
-            current_day = now.day
-            if target_day <= current_day:
-                if now.month == 12:
-                    next_month = now.replace(year=now.year + 1, month=1, day=target_day, hour=target_hour, minute=target_minute)
-                else:
-                    next_month = now.replace(month=now.month + 1, day=target_day, hour=target_hour, minute=target_minute)
-            else:
-                next_month = now.replace(day=target_day, hour=target_hour, minute=target_minute)
-            return next_month.strftime("%Y-%m-%d %H:%M")
+            next_month = now.replace(day=target_day, hour=target_hour, minute=target_minute)
+        return next_month.strftime("%Y-%m-%d %H:%M")
     
     def _calculate_weekly_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, now: datetime.datetime) -> str:
-        weekday_map = {"monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3, "friday": 4, "saturday": 5, "sunday": 6}
-        weekday = repeat_data["weekday"]
-        
-        # Handle both string names and numeric values
+        weekday_map = {"monday": 1, "tuesday": 2, "wednesday": 3, "thursday": 4, "friday": 5, "saturday": 6, "sunday": 7}
+        weekday = repeat_data.get("weekday")
         if isinstance(weekday, str):
-            target_weekday = weekday_map.get(weekday, 0)
+            target_weekday = weekday_map.get(weekday.lower(), 1)
         elif isinstance(weekday, int):
             target_weekday = weekday
         else:
-            target_weekday = 0
-        current_weekday = now.weekday()
+            target_weekday = 1
+        current_weekday = now.weekday() + 1
         days_ahead = target_weekday - current_weekday
-        self.logger.info(f"Weekly calc: target={target_weekday}, current={current_weekday}, days_ahead={days_ahead}")
         if days_ahead < 0:
             days_ahead += 7
         elif days_ahead == 0:
-            # Same day - check if time has passed
             if target_hour < now.hour or (target_hour == now.hour and target_minute <= now.minute):
                 days_ahead += 7
-                
         next_occurrence = now + datetime.timedelta(days=days_ahead)
         next_occurrence = next_occurrence.replace(hour=target_hour, minute=target_minute)
         return next_occurrence.strftime("%Y-%m-%d %H:%M")
@@ -210,7 +172,6 @@ class TimeCalculator:
         unit = repeat_data.get("unit", "minutes")
         
         if target_hour is not None and target_minute is not None:
-            # Use provided start_date or default to today
             if start_date is not None:
                 start_time = start_date.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
                 self.logger.info(f"Using start_date: {start_date} -> start_time: {start_time}")

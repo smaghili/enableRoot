@@ -1,16 +1,21 @@
 import datetime
 from convertdate import persian, gregorian, islamic
 from typing import Optional
+from .date_parser import DateParser
 
 class DateConverter:
-    @staticmethod
-    def convert_to_user_calendar(date_str: str, calendar_type: str) -> str:
+    def __init__(self):
+        self.date_parser = DateParser()
+    
+    def convert_to_user_calendar(self, date_str: str, calendar_type: str) -> str:
         try:
             dt = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
             if calendar_type == "shamsi":
-                return DateConverter._to_shamsi(dt)
-            elif calendar_type == "qamari":
-                return DateConverter._to_qamari(dt)
+                date_part = self.date_parser.format_for_display(dt, "shamsi")
+                return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"
+            elif calendar_type in ["qamari", "hijri"]:
+                date_part = self.date_parser.format_for_display(dt, "hijri")
+                return f"{date_part} {dt.hour:02d}:{dt.minute:02d}"
             else:
                 return date_str
         except Exception:

@@ -34,11 +34,11 @@ class APIClient:
                     return None
                 
                 data = await response.json()
-                if "choices" not in data or not data["choices"]:
+                if "choices" not in data or not data.get("choices"):
                     self.logger.error("No choices in API response")
                     return None
                 
-                content = data["choices"][0]["message"]["content"].strip()
+                content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
                 if content.startswith("```json"):
                     content = content[7:]
                 if content.startswith("```"):

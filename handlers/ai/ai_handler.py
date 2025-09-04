@@ -40,11 +40,20 @@ class AIHandler:
             if not content:
                 raise Exception("API call failed")
             
-            self.logger.info(f"OpenRouter response: {content}")
+            self.logger.info(f"OpenRouter response (first 200 chars): {content[:200]}")
+            self.logger.info(f"OpenRouter response (last 200 chars): {content[-200:]}")
+            self.logger.info(f"OpenRouter response length: {len(content)}")
+            self.logger.info(f"FULL OpenRouter response: {content}")
+            self.logger.info("DEBUG: Code reloaded successfully!")
+            
+            if not content.strip().startswith('{'):
+                self.logger.error(f"AI returned non-JSON response: {content}")
+                raise Exception(f"AI returned invalid format: {content[:100]}")
             
             try:
                 obj = json.loads(content)
                 self.logger.info(f"Parsed object type: {type(obj)}")
+                self.logger.info(f"Parsed object keys: {list(obj.keys()) if isinstance(obj, dict) else 'Not a dict'}")
             except json.JSONDecodeError as e:
                 self.logger.warning(f"JSON decode error: {e}")
                 if not content.strip().endswith('}'):
@@ -63,14 +72,18 @@ class AIHandler:
             
             self.logger.info(f"Parsed JSON: {obj}")
             
-            if "reminders" in obj and isinstance(obj["reminders"], list):
-                return self._process_reminders_list(obj["reminders"], user_calendar, timezone)
+            if "reminders" in obj and isinstance(obj.get("reminders"), list):
+                return self._process_reminders_list(obj.get("reminders", []), user_calendar, timezone)
             else:
                 return self._process_single_reminder(obj, user_calendar, timezone)
                 
         except (ValueError, KeyError, json.JSONDecodeError, asyncio.TimeoutError) as e:
             self.logger.error(f"AI parsing error: {e}")
             self.logger.error(f"Error type: {type(e).__name__}")
+            if hasattr(e, 'doc'):
+                self.logger.error(f"Error in JSON doc: {e.doc[:100] if e.doc else 'None'}")
+            if hasattr(e, 'pos'):
+                self.logger.error(f"Error at position: {e.pos}")
             raise Exception(f"AI parsing completely failed: {e}")
     
     def _process_reminders_list(self, reminders: list, user_calendar: str, timezone: str) -> Dict[str, Any]:
@@ -102,8 +115,8 @@ class AIHandler:
             return {
                 "reminders": [], 
                 "message": "past_date_error", 
-                "detected_date": first_error_info["detected_date"], 
-                "current_date": first_error_info["current_date"]
+                "detected_date": first_error_info.get("detected_date", ""), 
+                "current_date": first_error_info.get("current_date", "")
             }
         else:
             self.logger.warning("No valid reminders found in AI response")
@@ -188,8 +201,8 @@ class AIHandler:
             if not isinstance(obj, dict) or "city" not in obj or "timezone" not in obj:
                 return None
             
-            city = str(obj["city"])[:50]
-            timezone = str(obj["timezone"])
+            city = str(obj.get("city", ""))[:50]
+            timezone = str(obj.get("timezone", ""))
             
             if not self.timezone_detector.validate_timezone(timezone):
                 return None

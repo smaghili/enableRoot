@@ -25,6 +25,7 @@ class ReminderMessageHandler(IMessageHandler):
         self.user_request_times = {}
         self.user_message_count = {}
         self.waiting_for_city = {}
+        self.date_converter = DateConverter()
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -230,7 +231,7 @@ class ReminderMessageHandler(IMessageHandler):
             kb = MenuFactory.create_confirm_cancel_keyboard(lang, self.t)
             
             calendar_type = data["settings"].get("calendar", "miladi")
-            display_time = DateConverter.convert_to_user_calendar(edit_result.get("time", current_reminder["time"]), calendar_type)
+            display_time = self.date_converter.convert_to_user_calendar(edit_result.get("time", current_reminder["time"]), calendar_type)
             preview_text = self.t(lang, "edit_preview").format(
                 id=reminder_id,
                 old_content=current_reminder["content"],
@@ -284,7 +285,7 @@ class ReminderMessageHandler(IMessageHandler):
                     repeat_value = json.dumps(repeat_value)
                 repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-                display_time = DateConverter.convert_to_user_calendar(reminder['time'], calendar_type)
+                display_time = self.date_converter.convert_to_user_calendar(reminder['time'], calendar_type)
                 summary_lines.append(f"{i}. {reminder['content']} @ {display_time} ({category_text}) - {repeat_text}")
             summary = "\n".join(summary_lines)
         else:
@@ -296,7 +297,7 @@ class ReminderMessageHandler(IMessageHandler):
                 repeat_value = json.dumps(repeat_value)
             repeat_pattern = self.repeat_handler.from_json(repeat_value)
             repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-            display_time = DateConverter.convert_to_user_calendar(parsed['time'], calendar_type)
+            display_time = self.date_converter.convert_to_user_calendar(parsed['time'], calendar_type)
             summary_prefix = self.t(lang, 'summary')
             summary = f"{summary_prefix}: {parsed['content']} @ {display_time} ({category_text}) - {repeat_text}"
         kb = MenuFactory.create_confirm_cancel_keyboard(lang, self.t)
