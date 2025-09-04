@@ -34,27 +34,40 @@ class TimeCalculator:
     def calculate_reminder_time(self, reminder: dict, user_calendar: str, timezone: str) -> str:
         now = datetime.datetime.now()
         
+        repeat_data = reminder.get("repeat", {})
+        if isinstance(repeat_data, str):
+            repeat_data = json.loads(repeat_data) if repeat_data.startswith("{") else {"type": repeat_data}
+        repeat_type = repeat_data.get("type", "none")
+        
+        time_str = reminder.get("time")
+        target_hour, target_minute = self._get_target_time(time_str, now)
+        if repeat_type == "interval":
+            start_date = None
+            relative_days = reminder.get("relative_days")
+            if relative_days is not None:
+                start_date = now + datetime.timedelta(days=relative_days)
+            else:
+                specific_date = reminder.get("specific_date")
+                if specific_date and any(specific_date.get(k) is not None for k in ("day", "month", "year")):
+                    anchored = self.date_parser.convert_to_gregorian({
+                        "day": specific_date.get("day"),
+                        "month": specific_date.get("month"),
+                        "year": specific_date.get("year"),
+                        "calendar": specific_date.get("calendar")
+                    })
+                    if anchored:
+                        start_date = anchored
+            return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now, start_date=start_date)
+        
         specific_date = reminder.get("specific_date")
-        if specific_date and any(v is not None for v in specific_date.values()):
+        if specific_date and any(specific_date.get(k) is not None for k in ("day", "month", "year")):
             return self._calculate_specific_date_time(reminder, specific_date, user_calendar, now)
         
         relative_days = reminder.get("relative_days")
         if relative_days is not None:
             return self._calculate_relative_days_time(reminder, relative_days, user_calendar, now)
         
-        repeat_data = reminder.get("repeat", {})
-        if isinstance(repeat_data, str):
-            repeat_data = json.loads(repeat_data) if repeat_data.startswith("{") else {"type": repeat_data}
-        
-        repeat_type = repeat_data.get("type", "none")
-        time_str = reminder.get("time")
-        if repeat_type == "interval" and time_str is None:
-            return self._calculate_interval_repeat(repeat_data, None, None, now)
-        
-        target_hour, target_minute = self._get_target_time(time_str, now)
         if reminder.get("today", False) or reminder.get("relative_days") == 0:
-            if repeat_type == "interval":
-                return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now)
             
             target_date = now.replace(hour=target_hour, minute=target_minute)
             if target_date <= now:
@@ -65,8 +78,6 @@ class TimeCalculator:
             return self._calculate_monthly_repeat(repeat_data, target_hour, target_minute, user_calendar, now)
         elif repeat_type == "weekly" and "weekday" in repeat_data:
             return self._calculate_weekly_repeat(repeat_data, target_hour, target_minute, now)
-        elif repeat_type == "interval":
-            return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now)
         
         target_date = now.replace(hour=target_hour, minute=target_minute)
         if target_date <= now:

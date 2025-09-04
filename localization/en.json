@@ -68,6 +68,7 @@
   "max_reminders_reached": "❌ You have reached the maximum number of reminders ({max})",
   "multiple_reminders_saved": "✅ {count} reminders saved:",
   "multiple_reminders_summary": "📋 {count} reminders detected:",
+  "age_suffix": " {years} years old",
   "category_medicine": "💊 Medicine",
   "category_birthday": "🎂 Birthday",
   "category_appointment": "📅 Appointment",

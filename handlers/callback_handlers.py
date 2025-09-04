@@ -370,13 +370,24 @@ class ReminderCallbackHandler(IMessageHandler):
                     }
                     corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
                     reminder_data["time"] = corrected_time
+                    meta = None
+                    try:
+                        if reminder.get("category") == "birthday" and reminder.get("specific_date"):
+                            from utils.date_parser import DateParser
+                            dp = DateParser()
+                            birth_dt = dp.convert_to_gregorian(reminder.get("specific_date"))
+                            if birth_dt:
+                                meta = json.dumps({"birthdate_gregorian": birth_dt.strftime("%Y-%m-%d")})
+                    except Exception:
+                        meta = None
                     reminder_id = self.db.add(
                         user_id,
                         reminder_data["category"],
                         reminder_data["content"],
                         reminder_data["time"],
                         reminder_data["timezone"],
-                        reminder_data["repeat"]
+                        reminder_data["repeat"],
+                        meta=meta
                     )
                     self.storage.add_reminder(user_id, reminder_data)
 
@@ -394,13 +405,24 @@ class ReminderCallbackHandler(IMessageHandler):
                 }
                 corrected_time = self._calculate_correct_time(reminder_data, calendar_type)
                 reminder_data["time"] = corrected_time
+                meta = None
+                try:
+                    if pending_data.get("category") == "birthday" and pending_data.get("specific_date"):
+                        from utils.date_parser import DateParser
+                        dp = DateParser()
+                        birth_dt = dp.convert_to_gregorian(pending_data.get("specific_date"))
+                        if birth_dt:
+                            meta = json.dumps({"birthdate_gregorian": birth_dt.strftime("%Y-%m-%d")})
+                except Exception:
+                    meta = None
                 reminder_id = self.db.add(
                     user_id,
                     reminder_data["category"],
                     reminder_data["content"],
                     reminder_data["time"],
                     reminder_data["timezone"],
-                    reminder_data["repeat"]
+                    reminder_data["repeat"],
+                    meta=meta
                 )
                 self.storage.add_reminder(user_id, reminder_data)
 

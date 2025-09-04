@@ -68,6 +68,7 @@
   "max_reminders_reached": "❌ Вы достигли максимального количества напоминаний ({max})",
   "multiple_reminders_saved": "✅ Сохранено {count} напоминаний:",
   "multiple_reminders_summary": "📋 Обнаружено {count} напоминаний:",
+  "age_suffix": " {years} лет",
   "category_medicine": "💊 Лекарство",
   "category_birthday": "🎂 День рождения",
   "category_appointment": "📅 Встреча",

@@ -68,6 +68,7 @@
   "max_reminders_reached": "❌ لقد وصلت إلى الحد الأقصى من التذكيرات ({max})",
   "multiple_reminders_saved": "✅ تم حفظ {count} تذكيرات:",
   "multiple_reminders_summary": "📋 تم اكتشاف {count} تذكيرات:",
+  "age_suffix": " {years} سنة",
   "category_medicine": "💊 دواء",
   "category_birthday": "🎂 عيد ميلاد",
   "category_appointment": "📅 موعد",

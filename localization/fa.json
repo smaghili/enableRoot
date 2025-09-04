@@ -69,6 +69,7 @@
   "max_reminders_reached": "❌ شما به حداکثر تعداد یادآوری‌ها رسیده‌اید ({max})",
   "multiple_reminders_saved": "✅ {count} یادآوری ذخیره شد:",
   "multiple_reminders_summary": "📋 {count} یادآوری تشخیص داده شد:",
+  "age_suffix": " {years} سالگی",
   "category_medicine": "💊 دارو",
   "category_birthday": "🎂 تولد",
   "category_appointment": "📅 قرار ملاقات",

@@ -70,8 +70,8 @@ Rules:
 9. Always keep content in the same language as the input. 
      Do NOT translate or transliterate. Names, events, and labels must remain exactly in user’s language.
 10. If user says "today/امروز/hoy" → today=true.
-11. If input mentions multiple start times with an interval:
-    - Generate one interval reminder for each start time.
-    - Words that indicate past or relative reference (e.g., "today", "yesterday", "two days ago", "I took", "I did") 
-      only anchor the starting point.
-    - All mentioned start times must inherit the same interval repeat type.
+11. If the input contains multiple start times and an interval (e.g., "I took at 8 and at 10, every 8 hours"):
+    - For EVERY mentioned time (past, present, or future), create one reminder with type="interval".
+    - Past or relative references (e.g., "yesterday", "two days ago", "I took") do NOT change the repeat type.
+      They only shift the anchor time for the interval start.
+    - Never mix "none" and "interval" in the same request if an interval is mentioned.

@@ -52,11 +52,17 @@ class Database:
                     time text,
                     timezone text,
                     repeat text,
-                    status text
+                    status text,
+                    meta text
                 )
                 """
             )
             self._create_indexes()
+            # Ensure backward compatibility: add meta column if missing
+            try:
+                self.conn.execute("ALTER TABLE reminders ADD COLUMN meta text")
+            except Exception:
+                pass
     
     def _create_indexes(self):
         with self.conn:
@@ -69,15 +75,15 @@ class Database:
             for index in indexes:
                 self.conn.execute(index)
 
-    def add(self, user_id, category, content, time, timezone, repeat, status="active"):
+    def add(self, user_id, category, content, time, timezone, repeat, status="active", meta=None):
         with self.lock, self.conn:
             dt_local = datetime.datetime.strptime(time, "%Y-%m-%d %H:%M")
             dt_utc = dt_local - _parse_tz(timezone)
             time_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
 
             cursor = self.conn.execute(
-                "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
-                (user_id, category, content, time_utc, timezone, repeat, status),
+                "insert into reminders(user_id,category,content,time,timezone,repeat,status,meta) values(?,?,?,?,?,?,?,?)",
+                (user_id, category, content, time_utc, timezone, repeat, status, meta),
             )
             reminder_id = cursor.lastrowid
             if category == "birthday" and repeat == "yearly":

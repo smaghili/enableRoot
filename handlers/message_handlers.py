@@ -286,7 +286,19 @@ class ReminderMessageHandler(IMessageHandler):
                 repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
                 display_time = self.date_converter.convert_to_user_calendar(reminder['time'], calendar_type)
-                summary_lines.append(f"{i}. {reminder['content']} @ {display_time} ({category_text}) - {repeat_text}")
+                age_suffix = ""
+                try:
+                    if reminder.get('category') == 'birthday' and reminder.get('specific_date'):
+                        from utils.date_parser import DateParser
+                        dp = DateParser()
+                        birth_dt = dp.convert_to_gregorian(reminder.get('specific_date'))
+                        if birth_dt:
+                            scheduled_dt = datetime.datetime.strptime(reminder['time'], "%Y-%m-%d %H:%M")
+                            age_years = scheduled_dt.year - birth_dt.year - ((scheduled_dt.month, scheduled_dt.day) < (birth_dt.month, birth_dt.day))
+                            age_suffix = self.t(lang, "age_suffix", years=age_years)
+                except Exception:
+                    age_suffix = ""
+                summary_lines.append(f"{i}. {reminder['content']} @ {display_time} ({category_text}{age_suffix}) - {repeat_text}")
             summary = "\n".join(summary_lines)
         else:
             category_text = self.t(lang, f"category_{parsed['category']}")
