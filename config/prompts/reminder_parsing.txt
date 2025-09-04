@@ -52,9 +52,11 @@ Rules:
      - Convert to total minutes from now (1h=60min, 2h=120min, 30min=30min)
      - Set relative_days=null, relative_minutes=X, time=null
 4. Specific dates:
-   - Peب - detect intelligently
-   - Use context and logical ranges to determine which is day vs month
-   - If number > 12, it must be day; if ≤ 12, analyze context
+   - Persian dates intelligent detection:
+     * If first number > 1300 → YEAR/MONTH/DAY (1385/5/10 = 10 مرداد 1385)
+     * If last number > 1300 → DAY/MONTH/YEAR (10/5/1385 = 10 مرداد 1385)
+     * If middle position → MONTH always
+   - Use year position to determine date format automatically
    - Extract as: {{ "day": DAY, "month": MONTH, "year": YEAR }}
    - ALWAYS include calendar field: "calendar": "shamsi" | "gregorian" | "hijri"
    - For Persian/Farsi dates (like ۱۳۶۶/۵/۱ or 1366/5/1) → "calendar": "shamsi"
