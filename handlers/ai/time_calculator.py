@@ -155,9 +155,7 @@ class TimeCalculator:
         self.logger.info(f"repeat_data after processing: {repeat_data}")
         if isinstance(repeat_data, dict) and repeat_data.get("type") == "interval":
             return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now, start_date=target_date)
-        if target_date < now:
-            target_date += datetime.timedelta(days=1)
-        return target_date.strftime("%Y-%m-%d %H:%M")
+        return self._convert_to_utc(target_date)
     
     def _calculate_monthly_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, user_calendar: str, now: datetime.datetime) -> str:
         target_day = repeat_data.get("day", now.day)
@@ -192,20 +190,8 @@ class TimeCalculator:
         return self._convert_to_utc(next_occurrence)
     
     def _calculate_interval_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, now: datetime.datetime, start_date: datetime.datetime = None) -> str:
-        value = repeat_data.get("value", 0)
-        unit = repeat_data.get("unit", "minutes")
-        
-        if unit == "minutes":
-            next_time = now + datetime.timedelta(minutes=value)
-        elif unit == "hours":
-            next_time = now + datetime.timedelta(hours=value)
-        elif unit == "days":
-            next_time = now + datetime.timedelta(days=value)
+        if start_date:
+            base_time = start_date.replace(hour=target_hour, minute=target_minute)
         else:
-            next_time = now
-        
-        if hasattr(self, '_current_timezone') and self._current_timezone:
-            from utils.timezone_manager import TimezoneManager
-            next_time = TimezoneManager.local_to_utc(next_time.strftime("%Y-%m-%d %H:%M"), self._current_timezone)
-        
-        return next_time.strftime("%Y-%m-%d %H:%M")
+            base_time = now.replace(hour=target_hour, minute=target_minute)
+        return self._convert_to_utc(base_time)
