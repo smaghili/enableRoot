@@ -182,39 +182,6 @@ class TimeCalculator:
         value = repeat_data.get("value", 0)
         unit = repeat_data.get("unit", "minutes")
         
-        if target_hour is not None and target_minute is not None:
-            if start_date is not None:
-                start_time = start_date.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-                self.logger.info(f"Using start_date: {start_date} -> start_time: {start_time}")
-            else:
-                start_time = now.replace(hour=target_hour, minute=target_minute, second=0, microsecond=0)
-            if unit == "minutes":
-                if start_time <= now:
-                    time_diff_minutes = (now - start_time).total_seconds() / 60
-                    intervals_passed = int(time_diff_minutes // value)
-                    next_time = start_time + datetime.timedelta(minutes=value * (intervals_passed + 1))
-                else:
-                    next_time = start_time
-            elif unit == "hours":
-                if start_time <= now:
-                    time_diff_hours = (now - start_time).total_seconds() / 3600
-                    intervals_passed = int(time_diff_hours // value)
-                    next_time = start_time + datetime.timedelta(hours=value * (intervals_passed + 1))
-                    self.logger.info(f"Hours calculation: diff={time_diff_hours:.2f}, intervals={intervals_passed}, next={next_time}")
-                else:
-                    next_time = start_time
-            elif unit == "days":
-                if start_time <= now:
-                    time_diff_days = (now - start_time).days
-                    intervals_passed = int(time_diff_days // value)
-                    next_time = start_time + datetime.timedelta(days=value * (intervals_passed + 1))
-                else:
-                    next_time = start_time
-            else:
-                next_time = start_time + datetime.timedelta(days=1)
-            
-            return next_time.strftime("%Y-%m-%d %H:%M")
-        
         if unit == "minutes":
             next_time = now + datetime.timedelta(minutes=value)
         elif unit == "hours":
