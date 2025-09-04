@@ -24,7 +24,7 @@ Output: You MUST return ONLY a valid JSON object with this EXACT structure. NO o
 {{
   "reminders": [
     {{
-      "category": "medicine|birthday|appointment|work|exercise|prayer|shopping|call|study|installment|bill|general",
+      "category": "medicine|birthday|anniversary|appointment|work|exercise|prayer|shopping|call|study|installment|bill|general",
       "content": "clean title (≤40 chars)",
       "time": "HH:MM"|null,
       "relative_days": number|null,
@@ -48,7 +48,9 @@ Rules:
 1. Fix all spelling/formatting errors (weekdays, months, times).
 2. Times → 24h format (e.g., 7:30 PM → 19:30).
 3. Relative days → integer offset (today=0, tomorrow=1, دیروز=-1, etc.).
-3.a. Relative minutes → integer offset from now (convert hours to minutes: 1h=60min, 2h=120min, etc.)
+3.a. Relative minutes → USE THIS FOR "X دقیقه/ساعت دیگر" expressions:
+     - Convert to total minutes from now (1h=60min, 2h=120min, 30min=30min)
+     - Set relative_days=null, relative_minutes=X, time=null
 4. Specific dates:
    - Extract as provided by user: {{ "day": X, "month": Y, "year": Z }}
    - ALWAYS include calendar field: "calendar": "shamsi" | "gregorian" | "hijri"
@@ -57,7 +59,12 @@ Rules:
    - For Islamic dates → "calendar": "hijri"
    - DO NOT convert between calendars. Always return exactly what user said, with correct calendar tag.
    - Conversion to Gregorian or other systems will be handled outside AI.
-5. Auto-detect category from content.
+5. Auto-detect category from content:
+   - Birthday events → category: "birthday", repeat: yearly
+   - Anniversary events → category: "anniversary", repeat: yearly
+   - Medicine/pills → category: "medicine"
+   - Person name + date (without explicit context) → likely birthday
+   - Automatically set yearly repeat for birthdays and anniversaries
 6. Repeat rules:
    - "every 8 hours" → interval
    - "every Friday" → weekly

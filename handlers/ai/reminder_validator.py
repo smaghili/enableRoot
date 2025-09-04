@@ -16,7 +16,7 @@ class ReminderValidator:
             return False
         
         valid_categories = [
-            "birthday", "medicine", "appointment", "work", "exercise", 
+            "birthday", "anniversary", "medicine", "appointment", "work", "exercise", 
             "prayer", "shopping", "call", "study", "installment", "bill", "general"
         ]
         

@@ -179,11 +179,9 @@ async def show_reminders_list(message: Message):
         emoji = config.emoji_mapping.get(reminder['category'], "⏰")
         repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
-        lines.append(message_handler.t(lang, "reminder_id").format(id=reminder['id']))
-        lines.append(f"{emoji} {reminder['content']}")
-        lines.append(message_handler.t(lang, "reminder_time").format(time=reminder['display_time']))
-        lines.append(message_handler.t(lang, "reminder_repeat").format(repeat=repeat_text))
-        lines.append("─" * 25)
+        compact_line = f"{emoji} {reminder['content']} 📅 {reminder['display_time']} 🔄 {repeat_text}"
+        lines.append(compact_line)
+        lines.append("")
     await message.answer("\n".join(lines))
 
 @dp.message(Command("delete"))

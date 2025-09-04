@@ -23,7 +23,7 @@ class AdminHandler:
         # Initialize manager classes
         self.user_manager = AdminUserManager(storage, config, locales)
         self.stats_manager = AdminStatsManager(storage, db, config, locales)
-        self.broadcast_manager = AdminBroadcastManager(storage, bot, locales)
+        self.broadcast_manager = AdminBroadcastManager(storage, bot, locales, config)
         self.user_limit_manager = AdminUserLimitManager(storage, config, locales)
         self.forced_join_manager = AdminForcedJoinManager(storage, config, locales, bot)
         self.user_deletion_manager = AdminUserDeletionManager(storage, db, config, locales)

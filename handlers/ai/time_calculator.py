@@ -117,20 +117,22 @@ class TimeCalculator:
         if day and month:
             time_str = reminder.get("time")
             target_hour, target_minute = self._get_target_time(time_str, now)
+            is_recurring_event = reminder.get("category") in ("birthday", "anniversary")
             date_data = {
                 "day": day,
                 "month": month,
-                "year": (None if reminder.get("category") == "birthday" else year),
+                "year": (None if is_recurring_event else year),
                 "calendar": calendar_type
             }
             target_date = self.date_parser.convert_to_gregorian(date_data)
             if not target_date:
                 return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
             target_date = target_date.replace(hour=target_hour, minute=target_minute)
-            if reminder.get("category") == "birthday":
-                if target_date < now:
-                    target_date = target_date.replace(year=target_date.year + 1)
-            return target_date.strftime("%Y-%m-%d %H:%M")
+            if target_date < now:
+                target_date = target_date.replace(year=now.year)
+                if target_date <= now:
+                    target_date = target_date.replace(year=now.year + 1)
+            return self._convert_to_utc(target_date)
         
         repeat_data = reminder.get("repeat", {})
         if isinstance(repeat_data, str):

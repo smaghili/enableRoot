@@ -1,25 +1,16 @@
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
 import logging
+from .base_admin_manager import BaseAdminManager
 
 logger = logging.getLogger(__name__)
 
-class AdminBroadcastManager:
-    def __init__(self, storage, bot, locales):
-        self.storage = storage
+class AdminBroadcastManager(BaseAdminManager):
+    def __init__(self, storage, bot, locales, config=None):
+        super().__init__(storage, config or {}, locales)
         self.bot = bot
-        self.locales = locales
         self.waiting_for_broadcast = set()
         self.waiting_for_private_message = {}
         self.waiting_for_private_user_id = set()
-
-    def t(self, lang, key, **kwargs):
-        text = self.locales.get(lang, self.locales["en"]).get(key, key)
-        if kwargs:
-            try:
-                text = text.format(**kwargs)
-            except (KeyError, ValueError):
-                pass
-        return text
 
     async def handle_broadcast_start(self, message: Message, lang: str):
         self.waiting_for_broadcast.add(message.from_user.id)
