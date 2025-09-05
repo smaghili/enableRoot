@@ -108,15 +108,8 @@ class AdminHandler:
         await self.show_admin_panel(message)
 
     async def handle_back_to_main(self, message: Message, lang: str):
-        keyboard = [
-            [KeyboardButton(text=self.t(lang, "btn_new"))],
-            [KeyboardButton(text=self.t(lang, "btn_delete")), KeyboardButton(text=self.t(lang, "btn_edit"))],
-            [KeyboardButton(text=self.t(lang, "btn_list"))],
-            [KeyboardButton(text=self.t(lang, "btn_settings")), KeyboardButton(text=self.t(lang, "btn_stats"))],
-            [KeyboardButton(text=self.t(lang, "btn_admin"))]
-        ]
-        
-        kb = ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+        from utils.menu_factory import MenuFactory
+        kb = MenuFactory.create_main_menu(lang, self.t, self.is_admin(message.from_user.id))
         await message.answer(self.t(lang, "menu"), reply_markup=kb)
 
     async def handle_admin_message(self, message: Message):

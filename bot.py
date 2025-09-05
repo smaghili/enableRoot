@@ -147,7 +147,7 @@ async def list_reminders(message: Message):
             display_helper = DisplayHelper()
             lines = []
             for reminder_tuple in reminders:
-                reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone)
+                reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone, lang)
                 emoji = config.emoji_mapping.get(reminder['category'], "⏰")
                 safe_content = message_handler.sanitize_input(str(reminder['content']))[:50]
                 lines.append(f"{reminder['id']}. {emoji} {safe_content} @ {reminder['display_time']}")
@@ -175,7 +175,36 @@ async def show_reminders_list(message: Message):
     display_helper = DisplayHelper()
     lines = [message_handler.t(lang, "reminders_list_title")]
     for reminder_tuple in reminders:
-        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone)
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone, lang)
+        emoji = config.emoji_mapping.get(reminder['category'], "⏰")
+        repeat_pattern = repeat_handler.from_json(reminder['repeat'])
+        repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
+        compact_line = f"{emoji} {reminder['content']} 📅 {reminder['display_time']} 🔄 {repeat_text}"
+        lines.append(compact_line)
+        lines.append("")
+    await message.answer("\n".join(lines))
+
+async def show_today_reminders(message: Message):
+    user_id = message.from_user.id
+    if not message_handler.rate_limit_check(user_id):
+        await message_handler.handle_rate_limit(message)
+        return
+    try:
+        data = storage.load(user_id)
+        lang = data.get("settings", {}).get("language", "fa")
+        calendar_type = data.get("settings", {}).get("calendar", "miladi")
+        user_timezone = data.get("settings", {}).get("timezone", "+03:30")
+        today_reminders = db.get_today_reminders(user_id, user_timezone)
+    except Exception as e:
+        logger.error(f"Error in show_today_reminders for user {user_id}: {e}")
+        return
+    if not today_reminders:
+        await message.answer(message_handler.t(lang, "no_today_reminders"))
+        return
+    display_helper = DisplayHelper()
+    lines = [message_handler.t(lang, "reminders_list_title")]
+    for reminder_tuple in today_reminders:
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone, lang)
         emoji = config.emoji_mapping.get(reminder['category'], "⏰")
         repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
@@ -233,7 +262,7 @@ async def show_delete_reminders(message: Message):
     display_helper = DisplayHelper()
     buttons = []
     for reminder_tuple in reminders:
-        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone)
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone, lang)
         emoji = config.emoji_mapping.get(reminder['category'], "⏰")
         repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
@@ -263,7 +292,7 @@ async def show_edit_reminders(message: Message):
     display_helper = DisplayHelper()
     buttons = []
     for reminder_tuple in reminders:
-        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone)
+        reminder = display_helper.format_reminder_display(reminder_tuple, calendar_type, user_timezone, lang)
         emoji = config.emoji_mapping.get(reminder['category'], "⏰")
         repeat_pattern = repeat_handler.from_json(reminder['repeat'])
         repeat_text = repeat_handler.get_display_text(repeat_pattern, lang)
@@ -339,13 +368,19 @@ async def handle_menu_buttons(message: Message):
     elif action == "edit":
         await show_edit_reminders(message)
     elif action == "new":
-        await message.answer(message_handler.t(lang, "new_reminder_text"))
+        creation_count = storage.increment_reminder_creation_count(user_id)
+        if creation_count <= config.detailed_prompt_count:
+            await message.answer(message_handler.t(lang, "new_reminder_detailed"), parse_mode="HTML", disable_web_page_preview=True)
+        else:
+            await message.answer(message_handler.t(lang, "new_reminder_simple"))
     elif action == "settings":
         kb = MenuFactory.create_settings_keyboard(lang, message_handler.t)
         await message.answer(message_handler.t(lang, "settings"), reply_markup=kb)
     elif action == "stats":
         stats = db.get_stats(user_id)
         await message.answer(message_handler.t(lang, "stats").format(**stats))
+    elif action == "today":
+        await show_today_reminders(message)
 
 
 @dp.callback_query(F.data.in_(["confirm", "cancel"]))

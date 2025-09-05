@@ -40,6 +40,7 @@ class Config:
             "prayer": "🕌", "shopping": "🛒", "call": "📞",
             "study": "📚", "bill": "💰", "general": "⏰"
         })
+        self.detailed_prompt_count: int = constants.get("detailed_prompt_count", 5)
         
         self.admin_ids: list = self.config_data.get("bot", {}).get("admin_ids", [])
         self.log_channel_id: Optional[int] = self.config_data.get("bot", {}).get("log_channel_id")

@@ -90,12 +90,12 @@ class DateParser:
         try:
             if calendar_type == "shamsi":
                 persian_date = persian.from_gregorian(dt.year, dt.month, dt.day)
-                return f"{persian_date[0]}-{persian_date[1]:02d}-{persian_date[2]:02d}"
+                return f"{persian_date[0]}/{persian_date[1]:02d}/{persian_date[2]:02d}"
             elif calendar_type == "hijri":
                 islamic_date = islamic.from_gregorian(dt.year, dt.month, dt.day)
-                return f"{islamic_date[0]}-{islamic_date[1]:02d}-{islamic_date[2]:02d}"
+                return f"{islamic_date[0]}/{islamic_date[1]:02d}/{islamic_date[2]:02d}"
             else:
-                return dt.strftime("%Y-%m-%d")
+                return dt.strftime("%Y/%m/%d")
                 
         except Exception as e:
             self.logger.error(f"Date formatting failed: {e}")

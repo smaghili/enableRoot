@@ -86,7 +86,8 @@ class ReminderMessageHandler(IMessageHandler):
             "btn_new": "new",
             "btn_settings": "settings",
             "btn_stats": "stats",
-            "btn_admin": "admin"
+            "btn_admin": "admin",
+            "btn_today": "today"
         }
         for key, action in button_mappings.items():
             if message_text == self.t(user_lang, key):
@@ -135,7 +136,7 @@ class ReminderMessageHandler(IMessageHandler):
                                          current_date=parsed.get("current_date", ""))
                 else:
                     error_message = self.t(lang, message_key)
-                await message.answer(error_message)
+                await message.answer(error_message, parse_mode="HTML", disable_web_page_preview=True)
                 return
                 
             self.session.pending[user_id] = parsed
@@ -234,7 +235,7 @@ class ReminderMessageHandler(IMessageHandler):
             
             calendar_type = data["settings"].get("calendar", "miladi")
             utc_time = edit_result.get("time", current_reminder["time"])
-            display_time = TimezoneManager.format_for_display(utc_time, data['settings']['timezone'], calendar_type)
+            display_time = TimezoneManager.format_for_display(utc_time, data['settings']['timezone'], calendar_type, lang)
             preview_text = self.t(lang, "edit_preview").format(
                 id=reminder_id,
                 old_content=current_reminder["content"],
@@ -288,7 +289,7 @@ class ReminderMessageHandler(IMessageHandler):
                     repeat_value = json.dumps(repeat_value)
                 repeat_pattern = self.repeat_handler.from_json(repeat_value)
                 repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-                display_time = TimezoneManager.format_for_display(reminder['time'], data['settings']['timezone'], calendar_type)
+                display_time = TimezoneManager.format_for_display(reminder['time'], data['settings']['timezone'], calendar_type, lang)
                 age_suffix = ""
                 try:
                     if reminder.get('category') == 'birthday' and reminder.get('specific_date'):
@@ -314,7 +315,7 @@ class ReminderMessageHandler(IMessageHandler):
                 repeat_value = json.dumps(repeat_value)
             repeat_pattern = self.repeat_handler.from_json(repeat_value)
             repeat_text = self.repeat_handler.get_display_text(repeat_pattern, lang)
-            display_time = TimezoneManager.format_for_display(parsed['time'], data['settings']['timezone'], calendar_type)
+            display_time = TimezoneManager.format_for_display(parsed['time'], data['settings']['timezone'], calendar_type, lang)
             summary_prefix = self.t(lang, 'summary')
             summary = f"{summary_prefix}: {parsed['content']} @ {display_time} ({category_text}) - {repeat_text}"
         kb = MenuFactory.create_confirm_cancel_keyboard(lang, self.t)

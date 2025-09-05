@@ -139,6 +139,24 @@ class Database:
             cur.close()
             return rows
 
+    def get_today_reminders(self, user_id, user_timezone):
+        with self.lock:
+            cur = self.conn.cursor()
+            now_utc = datetime.datetime.utcnow()
+            from utils.timezone_manager import TimezoneManager
+            today_local = TimezoneManager.utc_to_local(now_utc.strftime("%Y-%m-%d %H:%M"), user_timezone)
+            today_start = today_local.replace(hour=0, minute=0, second=0, microsecond=0)
+            today_end = today_local.replace(hour=23, minute=59, second=59, microsecond=999999)
+            today_start_utc = TimezoneManager.local_to_utc(today_start.strftime("%Y-%m-%d %H:%M"), user_timezone)
+            today_end_utc = TimezoneManager.local_to_utc(today_end.strftime("%Y-%m-%d %H:%M"), user_timezone)
+            cur.execute(
+                "select id,category,content,time,timezone,repeat,status from reminders where user_id=? and status=? and time >= ? and time <= ?",
+                (user_id, "active", today_start_utc.strftime("%Y-%m-%d %H:%M"), today_end_utc.strftime("%Y-%m-%d %H:%M")),
+            )
+            rows = cur.fetchall()
+            cur.close()
+            return rows
+
     def update_status(self, reminder_id, status):
         with self.lock, self.conn:
             self.conn.execute("update reminders set status=? where id=?", (status, reminder_id))

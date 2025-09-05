@@ -73,6 +73,12 @@ class TimeCalculator:
                         start_date = anchored
             return self._calculate_interval_repeat(repeat_data, target_hour, target_minute, now, start_date=start_date)
         
+        # Handle repeat patterns first (monthly/weekly take priority)
+        if repeat_type == "monthly" and "day" in repeat_data:
+            return self._calculate_monthly_repeat(repeat_data, target_hour, target_minute, user_calendar, now)
+        elif repeat_type == "weekly" and "weekday" in repeat_data:
+            return self._calculate_weekly_repeat(repeat_data, target_hour, target_minute, now)
+        
         specific_date = reminder.get("specific_date")
         if specific_date and any(specific_date.get(k) is not None for k in ("day", "month", "year")):
             return self._calculate_specific_date_time(reminder, specific_date, user_calendar, now)
@@ -90,11 +96,6 @@ class TimeCalculator:
             if target_date <= now:
                 target_date += datetime.timedelta(days=1)
             return self._convert_to_utc(target_date)
-        
-        if repeat_type == "monthly" and "day" in repeat_data:
-            return self._calculate_monthly_repeat(repeat_data, target_hour, target_minute, user_calendar, now)
-        elif repeat_type == "weekly" and "weekday" in repeat_data:
-            return self._calculate_weekly_repeat(repeat_data, target_hour, target_minute, now)
         
         target_date = now.replace(hour=target_hour, minute=target_minute)
         if target_date <= now:
@@ -179,16 +180,111 @@ class TimeCalculator:
         return self._convert_to_utc(target_date)
     
     def _calculate_monthly_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, user_calendar: str, now: datetime.datetime) -> str:
-        target_day = repeat_data.get("day", now.day)
-        current_day = now.day
-        if target_day <= current_day:
-            if now.month == 12:
-                next_month = now.replace(year=now.year + 1, month=1, day=target_day, hour=target_hour, minute=target_minute)
+        target_day = repeat_data.get("day", now.day) 
+        if user_calendar == "shamsi":
+            return self._calculate_shamsi_monthly_repeat(target_day, target_hour, target_minute, now)
+        elif user_calendar == "qamari":
+            return self._calculate_qamari_monthly_repeat(target_day, target_hour, target_minute, now)
+        return self._calculate_gregorian_monthly_repeat(target_day, target_hour, target_minute, now)
+    
+    def _calculate_shamsi_monthly_repeat(self, target_day: int, target_hour: int, target_minute: int, now: datetime.datetime) -> str:
+        try:
+            if persian is None:
+                self.logger.warning("Persian calendar not available, falling back to Gregorian")
+                return self._calculate_gregorian_monthly_repeat(target_day, target_hour, target_minute, now)
+            current_shamsi = persian.from_gregorian(now.year, now.month, now.day)
+            shamsi_year, shamsi_month, shamsi_day = current_shamsi
+            try:
+                if target_day >= shamsi_day:
+                    current_month_target = persian.to_gregorian(shamsi_year, shamsi_month, target_day)
+                    target_date = datetime.datetime(current_month_target[0], current_month_target[1], current_month_target[2], target_hour, target_minute)
+                    if target_date > now:
+                        return self._convert_to_utc(target_date)
+            except:
+                pass
+            if shamsi_month == 12:
+                next_shamsi_year = shamsi_year + 1
+                next_shamsi_month = 1
             else:
-                next_month = now.replace(month=now.month + 1, day=target_day, hour=target_hour, minute=target_minute)
+                next_shamsi_year = shamsi_year
+                next_shamsi_month = shamsi_month + 1
+            if next_shamsi_month <= 6:
+                max_day = 31
+            elif next_shamsi_month <= 11:
+                max_day = 30
+            else:
+                max_day = 29
+            actual_day = min(target_day, max_day)
+            
+            try:
+                next_month_target = persian.to_gregorian(next_shamsi_year, next_shamsi_month, actual_day)
+                target_date = datetime.datetime(next_month_target[0], next_month_target[1], next_month_target[2], target_hour, target_minute)
+                return self._convert_to_utc(target_date)
+            except Exception as e:
+                self.logger.error(f"Error calculating next Shamsi month: {e}")
+                return self._calculate_gregorian_monthly_repeat(target_day, target_hour, target_minute, now)
+                
+        except Exception as e:
+            self.logger.error(f"Error in Shamsi monthly calculation: {e}")
+            return self._calculate_gregorian_monthly_repeat(target_day, target_hour, target_minute, now)
+    
+    def _calculate_gregorian_monthly_repeat(self, target_day: int, target_hour: int, target_minute: int, now: datetime.datetime) -> str:
+        try:
+            this_month = now.replace(day=target_day, hour=target_hour, minute=target_minute)
+            if this_month > now:
+                return self._convert_to_utc(this_month)
+        except ValueError:
+            pass
+        
+        if now.month == 12:
+            try:
+                next_month = now.replace(year=now.year + 1, month=1, day=target_day, hour=target_hour, minute=target_minute)
+            except ValueError:
+                next_month = now.replace(year=now.year + 1, month=1, day=min(target_day, 28), hour=target_hour, minute=target_minute)
         else:
-            next_month = now.replace(day=target_day, hour=target_hour, minute=target_minute)
-        return next_month.strftime("%Y-%m-%d %H:%M")
+            try:
+                next_month = now.replace(month=now.month + 1, day=target_day, hour=target_hour, minute=target_minute)
+            except ValueError:
+                import calendar
+                last_day = calendar.monthrange(now.year, now.month + 1)[1]
+                next_month = now.replace(month=now.month + 1, day=min(target_day, last_day), hour=target_hour, minute=target_minute)
+        
+        return self._convert_to_utc(next_month)
+    
+    def _calculate_qamari_monthly_repeat(self, target_day: int, target_hour: int, target_minute: int, now: datetime.datetime) -> str:
+        try:
+            if islamic is None:
+                self.logger.warning("Islamic calendar not available, falling back to Gregorian")
+                return self._calculate_gregorian_monthly_repeat(target_day, target_hour, target_minute, now)
+            
+            current_islamic = islamic.from_gregorian(now.year, now.month, now.day)
+            islamic_year, islamic_month, islamic_day = current_islamic
+            
+            try:
+                target_islamic_date = islamic.to_gregorian(islamic_year, islamic_month, target_day)
+                target_gregorian = datetime.datetime(*target_islamic_date, target_hour, target_minute)
+                if target_gregorian > now:
+                    return self._convert_to_utc(target_gregorian)
+            except (ValueError, OverflowError):
+                pass
+            
+            if islamic_month == 12:
+                try:
+                    next_month_islamic = islamic.to_gregorian(islamic_year + 1, 1, target_day)
+                except (ValueError, OverflowError):
+                    next_month_islamic = islamic.to_gregorian(islamic_year + 1, 1, min(target_day, 29))
+            else:
+                try:
+                    next_month_islamic = islamic.to_gregorian(islamic_year, islamic_month + 1, target_day)
+                except (ValueError, OverflowError):
+                    next_month_islamic = islamic.to_gregorian(islamic_year, islamic_month + 1, min(target_day, 29))
+            
+            target_gregorian = datetime.datetime(*next_month_islamic, target_hour, target_minute)
+            return self._convert_to_utc(target_gregorian)
+            
+        except Exception as e:
+            self.logger.error(f"Error in Qamari monthly calculation: {e}")
+            return self._calculate_gregorian_monthly_repeat(target_day, target_hour, target_minute, now)
     
     def _calculate_weekly_repeat(self, repeat_data: dict, target_hour: int, target_minute: int, now: datetime.datetime) -> str:
         weekday_map = {"monday": 1, "tuesday": 2, "wednesday": 3, "thursday": 4, "friday": 5, "saturday": 6, "sunday": 7}

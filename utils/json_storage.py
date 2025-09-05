@@ -19,7 +19,7 @@ class JSONStorage:
             default_data = {
                 "user_id": user_id,
                 "reminders": {"active": [], "completed": [], "cancelled": []},
-                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "setup_complete": False}
+                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "setup_complete": False, "reminder_creation_count": 0}
             }
             
             if os.path.exists(p):
@@ -90,6 +90,22 @@ class JSONStorage:
         except (FileNotFoundError, json.JSONDecodeError):
             return key
             
+    def increment_reminder_creation_count(self, user_id: int) -> int:
+        """Increment and return the user's reminder creation count"""
+        data = self.load(user_id)
+        if "settings" not in data:
+            data["settings"] = {}
+        current_count = data["settings"].get("reminder_creation_count", 0)
+        new_count = current_count + 1
+        data["settings"]["reminder_creation_count"] = new_count
+        self.save(user_id, data)
+        return new_count
+    
+    def get_reminder_creation_count(self, user_id: int) -> int:
+        """Get the user's current reminder creation count"""
+        data = self.load(user_id)
+        return data.get("settings", {}).get("reminder_creation_count", 0)
+
     def get_all_users(self):
         users = []
         for filename in os.listdir(self.path):

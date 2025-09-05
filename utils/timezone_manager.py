@@ -28,12 +28,12 @@ class TimezoneManager:
             return datetime.datetime.strptime(local_time_str, "%Y-%m-%d %H:%M")
     
     @classmethod
-    def format_for_display(cls, utc_time_str: str, timezone_str: str, calendar_type: str = "miladi") -> str:
+    def format_for_display(cls, utc_time_str: str, timezone_str: str, calendar_type: str = "miladi", language: str = "en") -> str:
         try:
             dt_local = cls.utc_to_local(utc_time_str, timezone_str)
             local_time_str = dt_local.strftime("%Y-%m-%d %H:%M")
             from .date_converter import DateConverter
             converter = DateConverter()
-            return converter.convert_to_user_calendar(local_time_str, calendar_type, None)
+            return converter.convert_to_user_calendar(local_time_str, calendar_type, None, language)
         except Exception:
             return utc_time_str

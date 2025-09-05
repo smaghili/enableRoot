@@ -30,7 +30,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.date_converter = DateConverter()
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
-    def _calculate_correct_time(self, reminder_data: dict, user_calendar: str) -> str:
+    def _calculate_correct_time(self, reminder_data: dict, user_calendar: str, user_timezone: str = "+03:30") -> str:
         now = datetime.datetime.now()
         repeat_data = reminder_data.get("repeat", {})
         if isinstance(repeat_data, str):
@@ -49,7 +49,10 @@ class ReminderCallbackHandler(IMessageHandler):
                 else:
                     next_month = shamsi_now.replace(day=target_day)
                 gregorian_date = next_month.togregorian()
-                return f"{gregorian_date.year}-{gregorian_date.month:02d}-{gregorian_date.day:02d} {now.hour:02d}:{now.minute:02d}"
+                local_time_str = f"{gregorian_date.year}-{gregorian_date.month:02d}-{gregorian_date.day:02d} {now.hour:02d}:{now.minute:02d}"
+                from utils.timezone_manager import TimezoneManager
+                utc_time = TimezoneManager.local_to_utc(local_time_str, user_timezone)
+                return utc_time.strftime("%Y-%m-%d %H:%M")
             else:
                 current_day = now.day
                 if target_day <= current_day:
@@ -59,7 +62,9 @@ class ReminderCallbackHandler(IMessageHandler):
                         next_month = now.replace(month=now.month + 1, day=target_day)
                 else:
                     next_month = now.replace(day=target_day)
-                return next_month.strftime("%Y-%m-%d %H:%M")
+                from utils.timezone_manager import TimezoneManager
+                utc_time = TimezoneManager.local_to_utc(next_month.strftime("%Y-%m-%d %H:%M"), user_timezone)
+                return utc_time.strftime("%Y-%m-%d %H:%M")
         elif repeat_type == "interval":
             value = repeat_data.get("value", 0)
             unit = repeat_data.get("unit", "minutes")
@@ -448,14 +453,16 @@ class ReminderCallbackHandler(IMessageHandler):
                     ], resize_keyboard=True)
                     await callback_query.message.answer(
                         self.t(lang, "ask_more"), 
-                        reply_markup=cancel_kb
+                        reply_markup=cancel_kb,
+                        parse_mode="HTML",
+                        disable_web_page_preview=True
                     )
                 else:
                     await callback_query.message.edit_reply_markup(reply_markup=None)
-                    await callback_query.message.answer(self.t(lang, "ask_more"))
+                    await callback_query.message.answer(self.t(lang, "ask_more"), parse_mode="HTML", disable_web_page_preview=True)
             else:
                 await callback_query.message.edit_reply_markup(reply_markup=None)
-                await callback_query.message.answer(self.t(lang, "ask_more"))
+                await callback_query.message.answer(self.t(lang, "ask_more"), parse_mode="HTML", disable_web_page_preview=True)
         await callback_query.answer()
     async def handle_exit_edit(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
@@ -465,13 +472,8 @@ class ReminderCallbackHandler(IMessageHandler):
             self.session.editing_reminders.pop(user_id, None)
             if user_id in self.session.pending:
                 self.session.pending.pop(user_id)
-            from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-            kb = ReplyKeyboardMarkup(keyboard=[
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_new"))],
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_delete")), KeyboardButton(text=self.message_handler.t(lang, "btn_edit"))],
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_list"))],
-                [KeyboardButton(text=self.message_handler.t(lang, "btn_settings")), KeyboardButton(text=self.message_handler.t(lang, "btn_stats"))]
-            ], resize_keyboard=True)
+            from utils.menu_factory import MenuFactory
+            kb = MenuFactory.create_main_menu(lang, self.message_handler.t, self.admin_handler.is_admin(user_id))
             await callback_query.message.answer(self.t(lang, "edit_cancelled"), reply_markup=kb)
         except Exception as e:
             logger.error(f"Error in handle_exit_edit for user {user_id}: {e}")

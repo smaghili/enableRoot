@@ -6,11 +6,10 @@ class MenuFactory:
     
     @staticmethod
     def create_main_menu(lang: str, t_func, is_admin: bool = False) -> ReplyKeyboardMarkup:
-        """Create main menu keyboard"""
         keyboard = [
             [KeyboardButton(text=t_func(lang, "btn_new"))],
+            [KeyboardButton(text=t_func(lang, "btn_today")), KeyboardButton(text=t_func(lang, "btn_list"))],
             [KeyboardButton(text=t_func(lang, "btn_delete")), KeyboardButton(text=t_func(lang, "btn_edit"))],
-            [KeyboardButton(text=t_func(lang, "btn_list"))],
             [KeyboardButton(text=t_func(lang, "btn_settings")), KeyboardButton(text=t_func(lang, "btn_stats"))]
         ]
         if is_admin:
