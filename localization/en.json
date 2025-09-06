@@ -154,5 +154,6 @@
   "admin_log_channel_set": "✅ Log channel set to {channel}",
   "enter_user_id_delete": "🔢 Enter user ID or username (@username) to delete:",
   "user_deleted_success": "✅ User {user_id} and all reminders deleted",
-  "user_not_found": "❌ User not found"
+  "user_not_found": "❌ User not found",
+  "update_notification": "Please restart the bot by sending /start command to receive bot updates🙏\n\n👉 /start"
 }

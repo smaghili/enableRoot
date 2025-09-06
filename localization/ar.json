@@ -154,7 +154,8 @@
   "admin_log_channel_set": "✅ تم تعيين قناة السجل إلى {channel}",
   "enter_user_id_delete": "🔢 أدخل معرف المستخدم أو اسم المستخدم (@username) للحذف:",
   "user_deleted_success": "✅ تم حذف المستخدم {user_id} وجميع التذكيرات",
-  "user_not_found": "❌ المستخدم غير موجود"
+  "user_not_found": "❌ المستخدم غير موجود",
+  "update_notification": "يرجى إعادة تشغيل البوت بإرسال الأمر /start لتلقي تحديثات البوت🙏\n\n👉 /start"
 }
 
 

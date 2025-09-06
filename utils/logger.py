@@ -19,7 +19,7 @@ class LogManager:
         except Exception:
             return self.config.log_channel_id if hasattr(self.config, 'log_channel_id') else None
 
-    async def send_reminder_log(self, reminder_id, user_id, category, content, reminder_type="created"):
+    async def send_reminder_log(self, reminder_id, user_id, category, content, reminder_type="created", original_message="", ai_detected_text=""):
         log_channel_id = self._get_current_log_channel()
         if not log_channel_id:
             return
@@ -62,16 +62,29 @@ class LogManager:
             
             reminder_type_hashtag = f"#{reminder_type}" if reminder_type else ""
             
-            log_message = f"""{content}
-{emoji} {bot_username}
-👤 name: {user_name}
-🆔 username: {username_display}
-📱 chat_id: {user_id}
-🉐 language: {language}
-📅 calendar: {calendar}
-🕐 timezone: {timezone}
-🆔 {bot_username}
-{reminder_type_hashtag}"""
+            # Format the log message with original message, AI detected text, and reminder ID
+            log_message_parts = []
+            
+            if original_message:
+                log_message_parts.append(f"📝 original_message: {original_message}")
+            
+            if ai_detected_text:
+                log_message_parts.append(f"🤖 ai_detected: {ai_detected_text}")
+            
+            log_message_parts.append(f"🆔 reminder_id: {reminder_id}")
+            log_message_parts.append("")  # Empty line for separation
+            log_message_parts.append(f"{content}")
+            log_message_parts.append(f"{emoji} {bot_username}")
+            log_message_parts.append(f"👤 name: {user_name}")
+            log_message_parts.append(f"🆔 username: {username_display}")
+            log_message_parts.append(f"📱 chat_id: {user_id}")
+            log_message_parts.append(f"🉐 language: {language}")
+            log_message_parts.append(f"📅 calendar: {calendar}")
+            log_message_parts.append(f"🕐 timezone: {timezone}")
+            log_message_parts.append(f"🆔 {bot_username}")
+            log_message_parts.append(f"{reminder_type_hashtag}")
+            
+            log_message = "\n".join(log_message_parts)
 
             await self.bot.send_message(log_channel_id, log_message)
             

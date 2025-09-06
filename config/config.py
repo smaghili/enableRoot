@@ -41,10 +41,12 @@ class Config:
             "study": "📚", "bill": "💰", "general": "⏰"
         })
         self.detailed_prompt_count: int = constants.get("detailed_prompt_count", 5)
-        
         self.admin_ids: list = self.config_data.get("bot", {}).get("admin_ids", [])
         self.log_channel_id: Optional[int] = self.config_data.get("bot", {}).get("log_channel_id")
         self.forced_join: dict = self.config_data.get("bot", {}).get("forced_join", {"enabled": False, "channels": []})
+        update_settings = self.config_data.get("bot", {}).get("update_notification", {})
+        self.inactive_days_threshold: int = update_settings.get("inactive_days_threshold", 30)
+        self.force_update_notification: bool = update_settings.get("force_update_notification", False)
 
     def reload_config(self):
         self.config_data = self._load_config()

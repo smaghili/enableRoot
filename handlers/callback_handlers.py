@@ -9,6 +9,7 @@ from config.interfaces import IMessageHandler
 from utils.date_converter import DateConverter
 from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
+from utils.update_checker import UpdateChecker
 try:
     import jdatetime
 except ImportError:
@@ -28,6 +29,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.log_manager = log_manager
         self.user_request_times = {}
         self.date_converter = DateConverter()
+        self.update_checker = UpdateChecker(storage, config)
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
     def _calculate_correct_time(self, reminder_data: dict, user_calendar: str, user_timezone: str = "+03:30") -> str:
@@ -107,6 +109,14 @@ class ReminderCallbackHandler(IMessageHandler):
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
+            update_sent = await self.update_checker.send_update_notification_if_needed(
+                callback, user_id, lang, self.t
+            )
+            if update_sent:
+                await callback.answer()
+                return
+            self.storage.update_last_activity(user_id)
+            
         except Exception as e:
             logger.error(f"Error in handle_callback for user {user_id}: {e}")
             await callback.answer()
@@ -367,6 +377,7 @@ class ReminderCallbackHandler(IMessageHandler):
             elif "reminders" in pending_data and isinstance(pending_data["reminders"], list):
                 created_count = 0
                 calendar_type = data["settings"].get("calendar", "miladi")
+                original_message = pending_data.get("original_message", "")
                 for reminder in pending_data["reminders"]:
                     reminder_data = {
                         "category": reminder.get("category", self.config.default_category),
@@ -399,13 +410,15 @@ class ReminderCallbackHandler(IMessageHandler):
                     if self.log_manager:
                         await self.log_manager.send_reminder_log(
                             reminder_id, user_id, reminder_data["category"], 
-                            reminder_data["content"], "created"
+                            reminder_data["content"], "created", original_message, 
+                            reminder_data["content"]
                         )
                     created_count += 1
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "multiple_reminders_saved").format(count=created_count))
             else:
                 calendar_type = data["settings"].get("calendar", "miladi")
+                original_message = pending_data.get("original_message", "")
                 reminder_data = {
                     "category": pending_data.get("category", self.config.default_category),
                     "content": pending_data.get("content", "")[:self.config.max_reminder_length],
@@ -437,7 +450,8 @@ class ReminderCallbackHandler(IMessageHandler):
                 if self.log_manager:
                     await self.log_manager.send_reminder_log(
                         reminder_id, user_id, reminder_data["category"], 
-                        reminder_data["content"], "created"
+                        reminder_data["content"], "created", original_message, 
+                        reminder_data["content"]
                     )
 
                 await callback_query.message.edit_reply_markup(reply_markup=None)

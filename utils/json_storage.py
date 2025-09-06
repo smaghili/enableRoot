@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+import datetime
 from typing import Dict, Any
 
 
@@ -19,7 +20,8 @@ class JSONStorage:
             default_data = {
                 "user_id": user_id,
                 "reminders": {"active": [], "completed": [], "cancelled": []},
-                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "setup_complete": False, "reminder_creation_count": 0}
+                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "setup_complete": False, "reminder_creation_count": 0},
+                "activity": {"last_activity": datetime.datetime.now().isoformat()}
             }
             
             if os.path.exists(p):
@@ -91,7 +93,6 @@ class JSONStorage:
             return key
             
     def increment_reminder_creation_count(self, user_id: int) -> int:
-        """Increment and return the user's reminder creation count"""
         data = self.load(user_id)
         if "settings" not in data:
             data["settings"] = {}
@@ -102,7 +103,6 @@ class JSONStorage:
         return new_count
     
     def get_reminder_creation_count(self, user_id: int) -> int:
-        """Get the user's current reminder creation count"""
         data = self.load(user_id)
         return data.get("settings", {}).get("reminder_creation_count", 0)
 
@@ -117,3 +117,27 @@ class JSONStorage:
                 except (ValueError, Exception):
                     continue
         return users
+    
+    def update_last_activity(self, user_id: int) -> None:
+        data = self.load(user_id)
+        if "activity" not in data:
+            data["activity"] = {}
+        data["activity"]["last_activity"] = datetime.datetime.now().isoformat()
+        self.save(user_id, data)
+    
+    def get_last_activity(self, user_id: int) -> datetime.datetime:
+        data = self.load(user_id)
+        activity_data = data.get("activity", {})
+        last_activity_str = activity_data.get("last_activity")
+        
+        if last_activity_str:
+            try:
+                return datetime.datetime.fromisoformat(last_activity_str)
+            except ValueError:
+                pass
+        return datetime.datetime.now()
+    
+    def is_user_inactive(self, user_id: int, days_threshold: int) -> bool:
+        last_activity = self.get_last_activity(user_id)
+        days_since_activity = (datetime.datetime.now() - last_activity).days
+        return days_since_activity > days_threshold

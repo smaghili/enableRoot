@@ -10,6 +10,7 @@ from config.interfaces import IMessageHandler
 from utils.date_converter import DateConverter
 from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
+from utils.update_checker import UpdateChecker
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class ReminderMessageHandler(IMessageHandler):
         self.user_message_count = {}
         self.waiting_for_city = {}
         self.date_converter = DateConverter()
+        self.update_checker = UpdateChecker(storage, config)
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -104,6 +106,12 @@ class ReminderMessageHandler(IMessageHandler):
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
+            update_sent = await self.update_checker.send_update_notification_if_needed(
+                message, user_id, lang, self.t
+            )
+            if update_sent:
+                return
+            
             if self.waiting_for_city.get(user_id, False):
                 await self.handle_city_input(message)
                 return
@@ -139,9 +147,11 @@ class ReminderMessageHandler(IMessageHandler):
                 await message.answer(error_message, parse_mode="HTML", disable_web_page_preview=True)
                 return
                 
+            parsed["original_message"] = message.text
             self.session.pending[user_id] = parsed
             self.session.pending_cleanup_time[user_id] = datetime.datetime.now() + datetime.timedelta(minutes=10)
             await self.handle_parsed_reminder(message, parsed, lang)
+            self.storage.update_last_activity(user_id)
         except Exception as e:
             logger.error(f"Error in handle_message for user {user_id}: {e}")
 

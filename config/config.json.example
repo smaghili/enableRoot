@@ -21,6 +21,10 @@
     "forced_join": {
       "enabled": false,
       "channels": []
+    },
+    "update_notification": {
+      "inactive_days_threshold": 30,
+      "force_update_notification": false
     }
   },
   "ai": {

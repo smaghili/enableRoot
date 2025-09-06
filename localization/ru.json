@@ -154,5 +154,6 @@
   "admin_log_channel_set": "✅ Канал логов установлен на {channel}",
   "enter_user_id_delete": "🔢 Введите ID пользователя или имя пользователя (@username) для удаления:",
   "user_deleted_success": "✅ Пользователь {user_id} и все напоминания удалены",
-  "user_not_found": "❌ Пользователь не найден"
+  "user_not_found": "❌ Пользователь не найден",
+  "update_notification": "Пожалуйста, перезапустите бота командой /start для получения обновлений🙏\n\n👉 /start"
 }
