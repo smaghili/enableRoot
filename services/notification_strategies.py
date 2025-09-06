@@ -4,6 +4,7 @@ import logging
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 from services.reminder_types import ReminderFactory
+from utils.comprehensive_logger import ComprehensiveLogger
 
 
 class NotificationStrategy(ABC):
@@ -22,6 +23,7 @@ class TelegramNotificationStrategy(NotificationStrategy):
     def __init__(self, log_manager=None):
         self.logger = logging.getLogger(__name__)
         self.log_manager = log_manager
+        self.comp_logger = ComprehensiveLogger()
     
     async def send_notification(self, bot: Bot, user_id: int, reminder_data: Dict[str, Any], 
                               lang: str, t_func) -> bool:
@@ -48,6 +50,18 @@ class TelegramNotificationStrategy(NotificationStrategy):
             
         except Exception as e:
             self.logger.error(f"Failed to send notification to user {user_id}: {e}")
+            try:
+                chat = await bot.get_chat(user_id)
+                user_name = chat.first_name or "Unknown"
+                username = chat.username or "Unknown"
+            except:
+                user_name = "Unknown"
+                username = "Unknown"
+            
+            self.comp_logger.log_event("notification_send_error", user_id, user_name, username, 
+                                     reminder_data.get('id'), success=False, error_message=str(e),
+                                     event_data={"category": reminder_data.get('category'), 
+                                               "content": reminder_data.get('content')})
             return False
 
 

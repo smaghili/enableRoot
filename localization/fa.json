@@ -156,5 +156,20 @@
   "enter_user_id_delete": "🔢 آیدی کاربر یا یوزرنیم (@username) را برای حذف وارد کنید:",
   "user_deleted_success": "✅ کاربر {user_id} و تمام یادآوری‌هایش حذف شد",
   "user_not_found": "❌ کاربر پیدا نشد",
-  "update_notification": "لطفا جهت دریافت آپدیت ربات با ارسال دستور /start ربات را مجدد راه اندازی کنید🙏\n\n👉 /start"
+  "update_notification": "لطفا جهت دریافت آپدیت ربات با ارسال دستور /start ربات را مجدد راه اندازی کنید🙏\n\n👉 /start",
+  "admin_export_logs": "📊 دریافت لاگ کامل",
+  "admin_export_preparing": "📊 در حال تهیه فایل لاگ کامل...\n\nلطفاً صبر کنید...",
+  "admin_export_too_large": "❌ فایل لاگ بیش از حد بزرگ است (>50MB)\n\nلطفاً از پنل سرور فایل را دانلود کنید.",
+  "admin_export_caption": "📊 فایل لاگ کامل سیستم\n📅 تاریخ: {date}\n📁 حجم: {size} KB",
+  "admin_export_success": "✅ فایل لاگ کامل ارسال شد!\n\n📋 شامل تمام رویدادهای سیستم از ابتدا تا کنون",
+  "admin_export_error": "❌ خطا در تولید فایل لاگ",
+  "admin_stats_report": "📊 آمار:\n\n👤 تعداد کاربران ربات: {total_users} نفر\n🖍 تعداد ادمین‌های ربات: {admin_count} نفر\n\n👤 کاربر درخواست کننده:\n🆔 ایدی عددی: {user_id}\n👤 نام: {user_name}\n🆔 یوزرنیم: @{username}\n📝 تعداد یادآوری‌های ثبت شده: {user_reminder_count} عدد\n\n🎂 تولدها\nتعداد تولدهای ثبت شده امروز: {birthdays_today}\nتعداد تولدهای یک هفته اخیر: {birthdays_week}\nتعداد تولدهای یک ماه اخیر: {birthdays_month}\nتعداد کل تولدهای ثبت شده تا امروز: {total_birthdays}\n\n💊 داروها\nتعداد یادآوری‌های دارو امروز: {medicine_today}\nتعداد یادآوری‌های دارو یک هفته اخیر: {medicine_week}\nتعداد یادآوری‌های دارو یک ماه اخیر: {medicine_month}\nتعداد کل یادآوری‌های دارو: {total_medicine}\n\n📋 عمومی\nتعداد یادآوری‌های عمومی امروز: {general_today}\nتعداد یادآوری‌های عمومی یک هفته اخیر: {general_week}\nتعداد یادآوری‌های عمومی یک ماه اخیر: {general_month}\nتعداد کل یادآوری‌های عمومی: {total_general}\n\n💼 کار\nتعداد یادآوری‌های کار امروز: {work_today}\nتعداد یادآوری‌های کار یک هفته اخیر: {work_week}\nتعداد یادآوری‌های کار یک ماه اخیر: {work_month}\nتعداد کل یادآوری‌های کار: {total_work}\n\n📅 سایر یادآوری‌ها\nتعداد سایر یادآوری‌های ثبت شده امروز: {other_today}\nتعداد سایر یادآوری‌های یک هفته اخیر: {other_week}\nتعداد سایر یادآوری‌های یک ماه اخیر: {other_month}\nتعداد کل سایر یادآوری‌های ثبت شده تا امروز: {total_other}",
+  "admin_error": "❌ خطا در پردازش درخواست ادمین",
+  "use_buttons": "لطفاً از دکمه‌های ربات استفاده کنید",
+  "access_denied": "❌ شما دسترسی به این بخش ندارید",
+  "admin_reminder_id_prompt": "🔢 شناسه یادآور مورد نظر را وارد کنید:",
+  "admin_no_logs_found": "❌ هیچ لاگی برای یادآور {reminder_id} یافت نشد",
+  "admin_reminder_log_caption": "📊 لاگ کامل یادآور #{reminder_id}\n📁 حجم: {size} KB",
+  "admin_reminder_log_success": "✅ لاگ کامل یادآور #{reminder_id} ارسال شد!",
+  "admin_invalid_reminder_id": "❌ شناسه یادآور نامعتبر است. لطفاً عدد وارد کنید."
 }

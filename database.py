@@ -3,6 +3,7 @@ import threading
 import datetime
 import os
 from urllib.parse import urlparse
+from utils.comprehensive_logger import ComprehensiveLogger
 
 
 
@@ -10,6 +11,7 @@ from urllib.parse import urlparse
 class Database:
     def __init__(self, path_or_url: str):
         self.lock = threading.Lock()
+        self.comp_logger = ComprehensiveLogger()
         
         if path_or_url.startswith(('sqlite:///', 'sqlite://')):
             parsed = urlparse(path_or_url)
@@ -160,11 +162,15 @@ class Database:
     def update_status(self, reminder_id, status):
         with self.lock, self.conn:
             self.conn.execute("update reminders set status=? where id=?", (status, reminder_id))
+            self.comp_logger.log_event("database_status_update", 0, "System", "System", reminder_id,
+                                     event_data={"new_status": status})
 
     def update_time(self, reminder_id, new_time):
         with self.lock, self.conn:
             # new_time is already in UTC format from scheduler
             self.conn.execute("update reminders set time=? where id=?", (new_time, reminder_id))
+            self.comp_logger.log_event("database_time_update", 0, "System", "System", reminder_id,
+                                     event_data={"new_time": new_time})
     
     def update_reminder(self, reminder_id, category, content, time, timezone, repeat):
         with self.lock, self.conn:

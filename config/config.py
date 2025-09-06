@@ -47,11 +47,32 @@ class Config:
         update_settings = self.config_data.get("bot", {}).get("update_notification", {})
         self.inactive_days_threshold: int = update_settings.get("inactive_days_threshold", 30)
         self.force_update_notification: bool = update_settings.get("force_update_notification", False)
+        ai_logging_settings = self.config_data.get("bot", {}).get("ai_logging", {})
+        self.ai_logging_enabled: bool = ai_logging_settings.get("enabled", True)
+        self.ai_database_path: str = ai_logging_settings.get("database_path", "data/ai_logs.db")
+        self.ai_cleanup_days: int = ai_logging_settings.get("cleanup_days", 30)
 
     def reload_config(self):
         self.config_data = self._load_config()
         self.log_channel_id = self.config_data.get("bot", {}).get("log_channel_id")
         self.admin_ids = self.config_data.get("bot", {}).get("admin_ids", [])
+        
+    def update_force_update_notification(self, value: bool):
+        self.force_update_notification = value
+        if "bot" not in self.config_data:
+            self.config_data["bot"] = {}
+        if "update_notification" not in self.config_data["bot"]:
+            self.config_data["bot"]["update_notification"] = {}
+        self.config_data["bot"]["update_notification"]["force_update_notification"] = value
+        self._save_config()
+        
+    def _save_config(self):
+        config_file = "config/config.json"
+        try:
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(self.config_data, f, indent=2, ensure_ascii=False)
+        except IOError as e:
+            print(f"Warning: Could not save {config_file}: {e}")
         
     def _load_config(self) -> dict:
         config_file = "config/config.json"

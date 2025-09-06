@@ -155,7 +155,22 @@
   "enter_user_id_delete": "🔢 أدخل معرف المستخدم أو اسم المستخدم (@username) للحذف:",
   "user_deleted_success": "✅ تم حذف المستخدم {user_id} وجميع التذكيرات",
   "user_not_found": "❌ المستخدم غير موجود",
-  "update_notification": "يرجى إعادة تشغيل البوت بإرسال الأمر /start لتلقي تحديثات البوت🙏\n\n👉 /start"
+  "update_notification": "يرجى إعادة تشغيل البوت بإرسال الأمر /start لتلقي تحديثات البوت🙏\n\n👉 /start",
+  "admin_export_logs": "📊 تصدير السجلات الكاملة",
+  "admin_export_preparing": "📊 جاري تحضير ملف السجل الكامل...\n\nيرجى الانتظار...",
+  "admin_export_too_large": "❌ ملف السجل كبير جداً (>50MB)\n\nيرجى التحميل من لوحة الخادم.",
+  "admin_export_caption": "📊 ملف سجل النظام الكامل\n📅 التاريخ: {date}\n📁 الحجم: {size} KB",
+  "admin_export_success": "✅ تم إرسال ملف السجل الكامل!\n\n📋 يحتوي على جميع أحداث النظام من البداية حتى الآن",
+  "admin_export_error": "❌ خطأ في إنشاء ملف السجل",
+  "admin_stats_report": "📊 الإحصائيات:\n\n👤 إجمالي مستخدمي البوت: {total_users} مستخدم\n🖍 إجمالي مديري البوت: {admin_count} مدير\n\n👤 المستخدم الطالب:\n🆔 معرف المستخدم: {user_id}\n👤 الاسم: {user_name}\n🆔 اسم المستخدم: @{username}\n📝 إجمالي التذكيرات المنشأة: {user_reminder_count} تذكير\n\n🎂 أعياد الميلاد\nأعياد الميلاد المسجلة اليوم: {birthdays_today}\nأعياد الميلاد في الأسبوع الماضي: {birthdays_week}\nأعياد الميلاد في الشهر الماضي: {birthdays_month}\nإجمالي أعياد الميلاد المسجلة: {total_birthdays}\n\n💊 الأدوية\nتذكيرات الأدوية اليوم: {medicine_today}\nتذكيرات الأدوية في الأسبوع الماضي: {medicine_week}\nتذكيرات الأدوية في الشهر الماضي: {medicine_month}\nإجمالي تذكيرات الأدوية: {total_medicine}\n\n📋 عام\nالتذكيرات العامة اليوم: {general_today}\nالتذكيرات العامة في الأسبوع الماضي: {general_week}\nالتذكيرات العامة في الشهر الماضي: {general_month}\nإجمالي التذكيرات العامة: {total_general}\n\n💼 العمل\nتذكيرات العمل اليوم: {work_today}\nتذكيرات العمل في الأسبوع الماضي: {work_week}\nتذكيرات العمل في الشهر الماضي: {work_month}\nإجمالي تذكيرات العمل: {total_work}\n\n📅 التذكيرات الأخرى\nالتذكيرات الأخرى المسجلة اليوم: {other_today}\nالتذكيرات الأخرى في الأسبوع الماضي: {other_week}\nالتذكيرات الأخرى في الشهر الماضي: {other_month}\nإجمالي التذكيرات الأخرى المسجلة: {total_other}",
+  "admin_error": "❌ خطأ في معالجة طلب المدير",
+  "use_buttons": "يرجى استخدام أزرار البوت",
+  "access_denied": "❌ ليس لديك صلاحية للوصول إلى هذا القسم",
+  "admin_reminder_id_prompt": "🔢 أدخل معرف التذكير الذي تريد الحصول على سجلاته:",
+  "admin_no_logs_found": "❌ لم يتم العثور على سجلات للتذكير {reminder_id}",
+  "admin_reminder_log_caption": "📊 سجلات كاملة للتذكير #{reminder_id}\n📁 الحجم: {size} KB",
+  "admin_reminder_log_success": "✅ تم إرسال السجلات الكاملة للتذكير #{reminder_id}!",
+  "admin_invalid_reminder_id": "❌ معرف التذكير غير صحيح. يرجى إدخال رقم."
 }
 
 

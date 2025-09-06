@@ -9,7 +9,7 @@ class AdminStatsManager:
         self.db = db
         self.config = config
         self.locales = locales
-
+    
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
         if kwargs:
@@ -18,7 +18,7 @@ class AdminStatsManager:
             except (KeyError, ValueError):
                 pass
         return text
-
+    
     async def handle_general_stats(self, message: Message, lang: str):
         user_id = message.from_user.id
         try:
@@ -36,18 +36,6 @@ class AdminStatsManager:
                               birthdays_week=stats['birthdays_week'],
                               birthdays_month=stats['birthdays_month'],
                               total_birthdays=stats['total_birthdays'],
-                              medicine_today=stats['medicine_today'],
-                              medicine_week=stats['medicine_week'],
-                              medicine_month=stats['medicine_month'],
-                              total_medicine=stats['total_medicine'],
-                              general_today=stats['general_today'],
-                              general_week=stats['general_week'],
-                              general_month=stats['general_month'],
-                              total_general=stats['total_general'],
-                              work_today=stats['work_today'],
-                              work_week=stats['work_week'],
-                              work_month=stats['work_month'],
-                              total_work=stats['total_work'],
                               other_today=stats['other_today'],
                               other_week=stats['other_week'],
                               other_month=stats['other_month'],
@@ -80,18 +68,6 @@ class AdminStatsManager:
         birthdays_week = 0
         birthdays_month = 0
         total_birthdays = 0
-        medicine_today = 0
-        medicine_week = 0
-        medicine_month = 0
-        total_medicine = 0
-        general_today = 0
-        general_week = 0
-        general_month = 0
-        total_general = 0
-        work_today = 0
-        work_week = 0
-        work_month = 0
-        total_work = 0
         other_today = 0
         other_week = 0
         other_month = 0
@@ -101,6 +77,7 @@ class AdminStatsManager:
             try:
                 reminder_date = datetime.datetime.strptime(reminder[3], "%Y-%m-%d %H:%M").date()
                 category = reminder[1]
+                
                 if category == "birthday":
                     total_birthdays += 1
                     if reminder_date == today:
@@ -109,30 +86,6 @@ class AdminStatsManager:
                         birthdays_week += 1
                     if reminder_date >= month_ago:
                         birthdays_month += 1
-                elif category == "medicine":
-                    total_medicine += 1
-                    if reminder_date == today:
-                        medicine_today += 1
-                    if reminder_date >= week_ago:
-                        medicine_week += 1
-                    if reminder_date >= month_ago:
-                        medicine_month += 1
-                elif category == "general":
-                    total_general += 1
-                    if reminder_date == today:
-                        general_today += 1
-                    if reminder_date >= week_ago:
-                        general_week += 1
-                    if reminder_date >= month_ago:
-                        general_month += 1
-                elif category == "work":
-                    total_work += 1
-                    if reminder_date == today:
-                        work_today += 1
-                    if reminder_date >= week_ago:
-                        work_week += 1
-                    if reminder_date >= month_ago:
-                        work_month += 1
                 else:
                     total_other += 1
                     if reminder_date == today:
@@ -151,18 +104,6 @@ class AdminStatsManager:
             'birthdays_week': birthdays_week,
             'birthdays_month': birthdays_month,
             'total_birthdays': total_birthdays,
-            'medicine_today': medicine_today,
-            'medicine_week': medicine_week,
-            'medicine_month': medicine_month,
-            'total_medicine': total_medicine,
-            'general_today': general_today,
-            'general_week': general_week,
-            'general_month': general_month,
-            'total_general': total_general,
-            'work_today': work_today,
-            'work_week': work_week,
-            'work_month': work_month,
-            'total_work': total_work,
             'other_today': other_today,
             'other_week': other_week,
             'other_month': other_month,
@@ -172,8 +113,6 @@ class AdminStatsManager:
     def get_user_reminder_count(self, user_id):
         try:
             user_reminders = self.db.list(user_id)
-            # Count only main reminders, exclude retry and pre-birthday reminders
-            main_reminders = [r for r in user_reminders if r[1] not in ["installment_retry", "birthday_pre_week", "birthday_pre_three"]]
-            return len(main_reminders)
+            return len(user_reminders)
         except:
             return 0

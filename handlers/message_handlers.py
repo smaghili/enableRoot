@@ -11,6 +11,7 @@ from utils.date_converter import DateConverter
 from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
 from utils.update_checker import UpdateChecker
+from utils.comprehensive_logger import ComprehensiveLogger
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ class ReminderMessageHandler(IMessageHandler):
         self.waiting_for_city = {}
         self.date_converter = DateConverter()
         self.update_checker = UpdateChecker(storage, config)
+        self.comp_logger = ComprehensiveLogger()
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -91,7 +93,13 @@ class ReminderMessageHandler(IMessageHandler):
             "btn_admin": "admin",
             "btn_today": "today"
         }
+        admin_button_mappings = {
+            "admin_export_logs": "admin_export_logs"
+        }
         for key, action in button_mappings.items():
+            if message_text == self.t(user_lang, key):
+                return action
+        for key, action in admin_button_mappings.items():
             if message_text == self.t(user_lang, key):
                 return action
         return None
@@ -115,6 +123,11 @@ class ReminderMessageHandler(IMessageHandler):
             if self.waiting_for_city.get(user_id, False):
                 await self.handle_city_input(message)
                 return
+            
+            # Check if admin is waiting for reminder ID
+            if self.admin_handler and hasattr(self.admin_handler, 'log_export_manager'):
+                if await self.admin_handler.log_export_manager.handle_reminder_id_input(message):
+                    return
             if user_id in self.session.editing_reminders:
                 if message.text == self.t(lang, "exit_edit"):
                     await self.handle_exit_edit_text(message, lang)
@@ -126,13 +139,38 @@ class ReminderMessageHandler(IMessageHandler):
             if not data["settings"].get("setup_complete", False):
                 return
             
+            button_action = self.get_button_action(message.text, lang)
+            if button_action:
+                
+                if button_action === "admin_export_logs":
+                    if self.admin_handler and self.admin_handler.is_admin(user_id):
+                        await self.admin_handler.handle_admin_button(message)
+                        return
+                    else:
+                        await message.answer(self.t(lang, "access_denied"))
+                        return
+                else:
+                    # Main buttons should be handled by bot.py, not here
+                    return
+            
             user_reminders = self.db.list(user_id)
             if self.config.max_reminders_per_user > 0 and len(user_reminders) >= self.config.max_reminders_per_user:
                 await message.answer(self.t(lang, "max_reminders_reached").format(max=self.config.max_reminders_per_user))
                 return
             logger.info(f"Parsing text for user {user_id}: {message.text}")
             user_calendar = data["settings"].get("calendar", "miladi")
-            parsed = await self.ai.parse(lang, data["settings"]["timezone"], message.text, user_calendar)
+            try:
+                chat = await message.bot.get_chat(user_id)
+                user_name = chat.first_name or "Unknown"
+                username = chat.username or "Unknown"
+            except:
+                user_name = "Unknown"
+                username = "Unknown"
+            
+            self.comp_logger.log_event("message_received", user_id, user_name, username,
+                                     event_data={"message_text": message.text, "language": lang, "calendar": user_calendar})
+            
+            parsed = await self.ai.parse(lang, data["settings"]["timezone"], message.text, user_calendar, user_id, user_name, username)
             if not parsed:
                 await message.answer(self.t(lang, "parse_error"))
                 return
@@ -151,7 +189,8 @@ class ReminderMessageHandler(IMessageHandler):
             self.session.pending[user_id] = parsed
             self.session.pending_cleanup_time[user_id] = datetime.datetime.now() + datetime.timedelta(minutes=10)
             await self.handle_parsed_reminder(message, parsed, lang)
-            self.storage.update_last_activity(user_id)
+            if not self.update_checker.config.force_update_notification:
+                self.storage.update_last_activity(user_id)
         except Exception as e:
             logger.error(f"Error in handle_message for user {user_id}: {e}")
 
@@ -222,7 +261,7 @@ class ReminderMessageHandler(IMessageHandler):
                 await message.answer(self.t(lang, "reminder_not_found"))
                 self.session.editing_reminders.pop(user_id, None)
                 return
-            edit_result = await self.ai.parse_edit(current_reminder, message.text, data["settings"]["timezone"])
+            edit_result = await self.ai.parse_edit(current_reminder, message.text, data["settings"]["timezone"], user_id)
             if not edit_result:
                 await message.answer(self.t(lang, "parse_error"))
                 return

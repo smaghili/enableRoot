@@ -7,6 +7,7 @@ from handlers.repeat_handler import RepeatHandler
 from config.interfaces import IScheduler, INotificationService
 from services.notification_strategies import NotificationContext, NotificationStrategyFactory
 from services.reminder_types import ReminderFactory
+from utils.comprehensive_logger import ComprehensiveLogger
 
 
 class ReminderScheduler(IScheduler):
@@ -23,6 +24,7 @@ class ReminderScheduler(IScheduler):
         self.notification_context = notification_context or NotificationContext(
             NotificationStrategyFactory.create("standard", log_manager=log_manager)
         )
+        self.comp_logger = ComprehensiveLogger()
         self._load_locales()
         
     def _load_locales(self):
@@ -98,16 +100,34 @@ class ReminderScheduler(IScheduler):
             return False
         return True
 
+    async def _get_user_info(self, user_id):
+        try:
+            chat = await self.bot.get_chat(user_id)
+            user_name = chat.first_name or "Unknown"
+            username = chat.username or "Unknown"
+            return user_name, username
+        except:
+            return "Unknown", "Unknown"
+
     async def _process_reminder(self, rid, uid, cat, content, time_str, repeat):
         async with self.processing_semaphore:
             try:
+                user_name, username = await self._get_user_info(uid)
+                self.comp_logger.log_event("reminder_processing_start", uid, user_name, username, rid,
+                                         event_data={"category": cat, "content": content})
+                
                 await self._send_reminder(rid, uid, cat, content, repeat)
+                
+                self.comp_logger.log_event("reminder_sent", uid, user_name, username, rid,
+                                         event_data={"category": cat, "content": content})
                 if cat == "installment":
                     await self._handle_installment_reminder(rid, uid, time_str, repeat)
                 else:
                     repeat_pattern = self.repeat_handler.from_json(repeat)
                     if repeat_pattern.type == "none":
                         self.db.update_status(rid, "completed")
+                        self.comp_logger.log_event("reminder_completed", uid, user_name, username, rid,
+                                                 event_data={"reason": "one_time_reminder"})
                         self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
                     else:
                         try:
@@ -123,12 +143,19 @@ class ReminderScheduler(IScheduler):
                         new_time = self._next_time(time_str, repeat, tz)
                         if new_time:
                             self.db.update_time(rid, new_time)
+                            self.comp_logger.log_event("reminder_rescheduled", uid, user_name, username, rid,
+                                                     event_data={"new_time": new_time, "repeat_pattern": repeat})
                             self.logger.info(f"Updated recurring reminder {rid} to {new_time}")
                         else:
                             self.logger.error(f"Failed to calculate next time for reminder {rid}")
                             self.db.update_status(rid, "cancelled")
+                            self.comp_logger.log_event("reminder_cancelled", uid, user_name, username, rid,
+                                                     success=False, error_message="Failed to calculate next time")
             except Exception as e:
                 self.logger.error(f"Error processing reminder {rid}: {e}")
+                user_name, username = await self._get_user_info(uid)
+                self.comp_logger.log_event("reminder_error", uid, user_name, username, rid,
+                                         success=False, error_message=str(e))
                 try:
                     self.db.update_status(rid, "cancelled")
                 except Exception as db_error:
@@ -162,7 +189,10 @@ class ReminderScheduler(IScheduler):
                     tz,
                     '{"type": "none"}'
                 )
-                self.logger.info(f"Created installment retry {retry_count + 1} for reminder {rid}")
+                self.db.update_status(rid, "completed")
+                self.comp_logger.log_event("reminder_completed", uid, "System", "System", rid,
+                                         event_data={"reason": "installment_retry_created", "retry_count": retry_count + 1})
+                self.logger.info(f"Created installment retry {retry_count + 1} for reminder {rid} and marked original as completed")
             else:
                 if repeat != "none":
                     new_time = self._next_time(time_str, repeat, tz)

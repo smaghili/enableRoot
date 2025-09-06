@@ -9,6 +9,7 @@ from .admin_user_limit_manager import AdminUserLimitManager
 from .admin_forced_join_manager import AdminForcedJoinManager
 from .admin_user_deletion_manager import AdminUserDeletionManager
 from .admin_log_channel_manager import AdminLogChannelManager
+from .admin_log_export_manager import AdminLogExportManager
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class AdminHandler:
         self.forced_join_manager = AdminForcedJoinManager(storage, config, locales, bot)
         self.user_deletion_manager = AdminUserDeletionManager(storage, db, config, locales)
         self.log_channel_manager = AdminLogChannelManager(storage, config, locales)
+        self.log_export_manager = AdminLogExportManager(storage, config, locales, bot)
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -85,6 +87,8 @@ class AdminHandler:
                 await self.user_deletion_manager.handle_delete_user_start(message, lang)
             elif button_text == self.t(lang, "admin_log_channel"):
                 await self.log_channel_manager.handle_log_channel_setup(message, lang)
+            elif button_text == self.t(lang, "admin_export_logs"):
+                await self.log_export_manager.handle_log_export_request(message)
             elif button_text == self.t(lang, "cancel_operation"):
                 await self.handle_cancel_operation(message, lang)
             elif button_text == self.t(lang, "back"):
@@ -137,6 +141,8 @@ class AdminHandler:
                 await self.user_deletion_manager.process_delete_user(message, lang)
             elif user_id in self.log_channel_manager.waiting_for_log_channel:
                 await self.log_channel_manager.process_log_channel(message, lang)
+            elif user_id in self.log_export_manager.waiting_for_reminder_id:
+                await self.log_export_manager.handle_reminder_id_input(message)
                 
         except Exception as e:
             logger.error(f"Error in handle_admin_message: {e}")
@@ -145,7 +151,7 @@ class AdminHandler:
         admin_buttons = [
             "admin_add_admin", "admin_remove_admin", "admin_general_stats", "admin_user_limit",
             "admin_broadcast", "admin_private_message", "admin_forced_join", "admin_delete_user",
-            "admin_log_channel", "back", "cancel_operation"
+            "admin_log_channel", "admin_export_logs", "back", "cancel_operation"
         ]
         return any(message_text == self.t(lang, btn) for btn in admin_buttons)
 

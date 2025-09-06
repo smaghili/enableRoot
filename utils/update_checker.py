@@ -25,7 +25,8 @@ class UpdateChecker:
                 await message_or_callback.answer(update_text)
             elif hasattr(message_or_callback, 'message'):
                 await message_or_callback.message.answer(update_text)
-            self.storage.update_last_activity(user_id)
+            if not self.config.force_update_notification:
+                self.storage.update_last_activity(user_id)
             return True
         except Exception as e:
             import logging

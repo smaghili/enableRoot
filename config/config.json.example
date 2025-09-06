@@ -25,6 +25,11 @@
     "update_notification": {
       "inactive_days_threshold": 30,
       "force_update_notification": false
+    },
+    "ai_logging": {
+      "enabled": true,
+      "database_path": "data/ai_logs.db",
+      "cleanup_days": 30
     }
   },
   "ai": {

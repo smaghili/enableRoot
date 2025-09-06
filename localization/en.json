@@ -155,5 +155,20 @@
   "enter_user_id_delete": "🔢 Enter user ID or username (@username) to delete:",
   "user_deleted_success": "✅ User {user_id} and all reminders deleted",
   "user_not_found": "❌ User not found",
-  "update_notification": "Please restart the bot by sending /start command to receive bot updates🙏\n\n👉 /start"
+  "update_notification": "Please restart the bot by sending /start command to receive bot updates🙏\n\n👉 /start",
+  "admin_export_logs": "📊 Export Complete Logs",
+  "admin_export_preparing": "📊 Preparing complete log file...\n\nPlease wait...",
+  "admin_export_too_large": "❌ Log file is too large (>50MB)\n\nPlease download from server panel.",
+  "admin_export_caption": "📊 Complete System Log File\n📅 Date: {date}\n📁 Size: {size} KB",
+  "admin_export_success": "✅ Complete log file sent!\n\n📋 Contains all system events from beginning to now",
+  "admin_export_error": "❌ Error generating log file",
+  "admin_stats_report": "📊 Statistics:\n\n👤 Total bot users: {total_users} users\n🖍 Total bot admins: {admin_count} admins\n\n👤 Requesting user:\n🆔 User ID: {user_id}\n👤 Name: {user_name}\n🆔 Username: @{username}\n📝 Total reminders created: {user_reminder_count} reminders\n\n🎂 Birthdays\nBirthdays registered today: {birthdays_today}\nBirthdays in last week: {birthdays_week}\nBirthdays in last month: {birthdays_month}\nTotal birthdays registered: {total_birthdays}\n\n💊 Medicine\nMedicine reminders today: {medicine_today}\nMedicine reminders in last week: {medicine_week}\nMedicine reminders in last month: {medicine_month}\nTotal medicine reminders: {total_medicine}\n\n📋 General\nGeneral reminders today: {general_today}\nGeneral reminders in last week: {general_week}\nGeneral reminders in last month: {general_month}\nTotal general reminders: {total_general}\n\n💼 Work\nWork reminders today: {work_today}\nWork reminders in last week: {work_week}\nWork reminders in last month: {work_month}\nTotal work reminders: {total_work}\n\n📅 Other Reminders\nOther reminders registered today: {other_today}\nOther reminders in last week: {other_week}\nOther reminders in last month: {other_month}\nTotal other reminders registered: {total_other}",
+  "admin_error": "❌ Error processing admin request",
+  "use_buttons": "Please use the bot buttons",
+  "access_denied": "❌ You don't have access to this section",
+  "admin_reminder_id_prompt": "🔢 Enter the reminder ID you want to get logs for:",
+  "admin_no_logs_found": "❌ No logs found for reminder {reminder_id}",
+  "admin_reminder_log_caption": "📊 Complete logs for reminder #{reminder_id}\n📁 Size: {size} KB",
+  "admin_reminder_log_success": "✅ Complete logs for reminder #{reminder_id} sent!",
+  "admin_invalid_reminder_id": "❌ Invalid reminder ID. Please enter a number."
 }

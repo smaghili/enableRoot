@@ -24,7 +24,7 @@ class MenuFactory:
             [KeyboardButton(text=t_func(lang, "admin_general_stats")), KeyboardButton(text=t_func(lang, "admin_delete_user"))],
             [KeyboardButton(text=t_func(lang, "admin_broadcast")), KeyboardButton(text=t_func(lang, "admin_private_message"))],
             [KeyboardButton(text=t_func(lang, "admin_user_limit")), KeyboardButton(text=t_func(lang, "admin_forced_join"))],
-            [KeyboardButton(text=t_func(lang, "admin_log_channel"))],
+            [KeyboardButton(text=t_func(lang, "admin_log_channel")), KeyboardButton(text=t_func(lang, "admin_export_logs"))],
             [KeyboardButton(text=t_func(lang, "back"))]
         ]
         return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)

@@ -10,6 +10,7 @@ from utils.date_converter import DateConverter
 from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
 from utils.update_checker import UpdateChecker
+from utils.comprehensive_logger import ComprehensiveLogger
 try:
     import jdatetime
 except ImportError:
@@ -30,6 +31,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.user_request_times = {}
         self.date_converter = DateConverter()
         self.update_checker = UpdateChecker(storage, config)
+        self.comp_logger = ComprehensiveLogger()
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
     def _calculate_correct_time(self, reminder_data: dict, user_calendar: str, user_timezone: str = "+03:30") -> str:
@@ -115,13 +117,46 @@ class ReminderCallbackHandler(IMessageHandler):
             if update_sent:
                 await callback.answer()
                 return
-            self.storage.update_last_activity(user_id)
+            if not self.update_checker.config.force_update_notification:
+                self.storage.update_last_activity(user_id)
             
         except Exception as e:
             logger.error(f"Error in handle_callback for user {user_id}: {e}")
             await callback.answer()
             return
-        await callback.answer()
+        
+        # Route to specific handler based on callback data
+        if callback.data.startswith("setup_lang_"):
+            await self.handle_setup_language_selection(callback)
+        elif callback.data.startswith("lang_"):
+            await self.handle_language_selection(callback)
+        elif callback.data == "change_lang":
+            await self.handle_change_language(callback)
+        elif callback.data == "change_tz":
+            await self.handle_change_timezone(callback)
+        elif callback.data.startswith("confirm_tz_"):
+            await self.handle_timezone_confirmation(callback)
+        elif callback.data == "cancel_tz":
+            await self.handle_timezone_cancel(callback)
+        elif callback.data == "change_calendar":
+            await self.handle_change_calendar(callback)
+        elif callback.data.startswith("calendar_"):
+            await self.handle_calendar_selection(callback)
+        elif callback.data.startswith("setup_calendar_"):
+            await self.handle_setup_calendar_selection(callback)
+        elif callback.data.startswith(("stop_", "paid_", "taken_")):
+            await self.handle_reminder_actions(callback)
+        elif callback.data.startswith("delete_confirm_"):
+            await self.handle_delete_confirmation(callback)
+        elif callback.data.startswith("edit_select_"):
+            await self.handle_edit_selection(callback)
+        elif callback.data == "exit_edit":
+            await self.handle_exit_edit(callback)
+        elif callback.data in ["confirm", "cancel"]:
+            await self.handle_confirm_cancel(callback)
+        else:
+            await callback.answer()
+            
     async def handle_setup_language_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -301,7 +336,20 @@ class ReminderCallbackHandler(IMessageHandler):
             logger.error(f"Error in handle_delete_confirmation for user {user_id}: {e}")
             await callback_query.answer()
             return
+        try:
+            chat = await callback_query.bot.get_chat(user_id)
+            user_name = chat.first_name or "Unknown"
+            username = chat.username or "Unknown"
+        except:
+            user_name = "Unknown"
+            username = "Unknown"
+        
+        reminder_content = next((r[2] for r in user_reminders if r[0] == reminder_id), "Unknown")
+        
         self.db.update_status(reminder_id, "cancelled")
+        self.comp_logger.log_event("reminder_deleted", user_id, user_name, username, reminder_id,
+                                 event_data={"content": reminder_content, "method": "user_action"})
+        
         await callback_query.message.edit_text(self.t(lang, "reminder_deleted").format(id=reminder_id))
         await callback_query.answer(self.t(lang, "delete_confirmed"))
     async def handle_edit_selection(self, callback_query: CallbackQuery):
@@ -345,6 +393,14 @@ class ReminderCallbackHandler(IMessageHandler):
                 reminder_id = pending_data["reminder_id"]
                 edit_result = pending_data["edited"]
                 original = pending_data["original"]
+                try:
+                    chat = await callback_query.bot.get_chat(user_id)
+                    user_name = chat.first_name or "Unknown"
+                    username = chat.username or "Unknown"
+                except:
+                    user_name = "Unknown"
+                    username = "Unknown"
+                
                 self.db.update_reminder(
                     reminder_id,
                     edit_result.get("category", original["category"]),
@@ -353,6 +409,13 @@ class ReminderCallbackHandler(IMessageHandler):
                     edit_result.get("timezone", original["timezone"]),
                     edit_result.get("repeat", original["repeat"])
                 )
+                
+                self.comp_logger.log_event("reminder_edited", user_id, user_name, username, reminder_id,
+                                         event_data={"old_content": original["content"], 
+                                                   "new_content": edit_result.get("content", original["content"]),
+                                                   "old_time": original["time"],
+                                                   "new_time": edit_result.get("time", original["time"])})
+                
                 self.session.editing_reminders.pop(user_id, None)
                 repeat_value = edit_result.get("repeat", original["repeat"])
                 if isinstance(repeat_value, dict):
@@ -407,6 +470,19 @@ class ReminderCallbackHandler(IMessageHandler):
                         meta=meta
                     )
                     self.storage.add_reminder(user_id, reminder_data)
+                    
+                    try:
+                        chat = await callback_query.bot.get_chat(user_id)
+                        user_name = chat.first_name or "Unknown"
+                        username = chat.username or "Unknown"
+                    except:
+                        user_name = "Unknown"
+                        username = "Unknown"
+                    
+                    self.comp_logger.log_event("reminder_created", user_id, user_name, username, reminder_id,
+                                             event_data={"category": reminder_data["category"], "content": reminder_data["content"], 
+                                                       "time": reminder_data["time"], "repeat": reminder_data["repeat"]})
+                    
                     if self.log_manager:
                         await self.log_manager.send_reminder_log(
                             reminder_id, user_id, reminder_data["category"], 
@@ -447,6 +523,19 @@ class ReminderCallbackHandler(IMessageHandler):
                     meta=meta
                 )
                 self.storage.add_reminder(user_id, reminder_data)
+                
+                try:
+                    chat = await callback_query.bot.get_chat(user_id)
+                    user_name = chat.first_name or "Unknown"
+                    username = chat.username or "Unknown"
+                except:
+                    user_name = "Unknown"
+                    username = "Unknown"
+                
+                self.comp_logger.log_event("reminder_created", user_id, user_name, username, reminder_id,
+                                         event_data={"category": reminder_data["category"], "content": reminder_data["content"], 
+                                                   "time": reminder_data["time"], "repeat": reminder_data["repeat"]})
+                
                 if self.log_manager:
                     await self.log_manager.send_reminder_log(
                         reminder_id, user_id, reminder_data["category"], 

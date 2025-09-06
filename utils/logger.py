@@ -32,13 +32,13 @@ class LogManager:
             
             try:
                 chat = await self.bot.get_chat(user_id)
-                user_name = chat.first_name or "نامشخص"
-                username = chat.username or "نامشخص"
+                user_name = chat.first_name or "Unknown"
+                username = chat.username or "Unknown"
             except:
-                user_name = "نامشخص"
-                username = "نامشخص"
+                user_name = "Unknown"
+                username = "Unknown"
             
-            username_display = f"@{username}" if username != "نامشخص" else "نامشخص"
+            username_display = f"@{username}" if username != "Unknown" else "Unknown"
             
             category_emojis = {
                 'birthday': '🎂',

@@ -44,7 +44,7 @@ dp = Dispatcher()
 db = Database(config.database_url)
 storage = JSONStorage(config.users_path)
 log_manager = LogManager(bot, config, storage)
-ai = AIHandler(config.openrouter_key, config.ai_model)
+ai = AIHandler(config.openrouter_key, config.ai_model, config)
 scheduler = ReminderScheduler(db, storage, bot, log_manager)
 repeat_handler = RepeatHandler()
 date_converter = DateConverter()
@@ -98,7 +98,8 @@ async def start_message(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
-
+    if config.force_update_notification:
+        config.update_force_update_notification(False)
     
     data = storage.load(user_id)
     is_new_user = not data.get("settings", {}).get("setup_complete", False)
@@ -335,6 +336,13 @@ async def handle_menu_buttons(message: Message):
     try:
         lang = storage.load(user_id).get("settings", {}).get("language", "fa")
         
+        # Check for update notification
+        update_sent = await message_handler.update_checker.send_update_notification_if_needed(
+            message, user_id, lang, message_handler.t
+        )
+        if update_sent:
+            return
+        
         if message.text == message_handler.t(lang, "btn_admin") and admin_handler.is_admin(user_id):
             await admin_handler.show_admin_panel(message)
             return
@@ -350,7 +358,8 @@ async def handle_menu_buttons(message: Message):
             user_id in admin_handler.forced_join_manager.waiting_for_channel or
             user_id in admin_handler.user_limit_manager.waiting_for_limit or
             user_id in admin_handler.user_deletion_manager.waiting_for_delete_user or
-            user_id in admin_handler.log_channel_manager.waiting_for_log_channel):
+            user_id in admin_handler.log_channel_manager.waiting_for_log_channel or
+            user_id in admin_handler.log_export_manager.waiting_for_reminder_id):
             await admin_handler.handle_admin_message(message)
             return
         
@@ -385,59 +394,59 @@ async def handle_menu_buttons(message: Message):
 
 @dp.callback_query(F.data.in_(["confirm", "cancel"]))
 async def process_callback(callback_query: CallbackQuery):
-    await callback_handler.handle_confirm_cancel(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("setup_lang_"))
 async def handle_setup_language_selection(callback_query: CallbackQuery):
-    await callback_handler.handle_setup_language_selection(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("lang_"))
 async def handle_language_selection(callback_query: CallbackQuery):
-    await callback_handler.handle_language_selection(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data == "change_lang")
 async def handle_change_language(callback_query: CallbackQuery):
-    await callback_handler.handle_change_language(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data == "change_tz")
 async def handle_change_timezone(callback_query: CallbackQuery):
-    await callback_handler.handle_change_timezone(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("confirm_tz_"))
 async def handle_timezone_confirmation(callback_query: CallbackQuery):
-    await callback_handler.handle_timezone_confirmation(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data == "cancel_tz")
 async def handle_timezone_cancel(callback_query: CallbackQuery):
-    await callback_handler.handle_timezone_cancel(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data == "change_calendar")
 async def handle_change_calendar(callback_query: CallbackQuery):
-    await callback_handler.handle_change_calendar(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("calendar_"))
 async def handle_calendar_selection(callback_query: CallbackQuery):
-    await callback_handler.handle_calendar_selection(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("setup_calendar_"))
 async def handle_setup_calendar_selection(callback_query: CallbackQuery):
-    await callback_handler.handle_setup_calendar_selection(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith(("stop_", "paid_", "taken_")))
 async def handle_reminder_actions(callback_query: CallbackQuery):
-    await callback_handler.handle_reminder_actions(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("delete_confirm_"))
 async def handle_delete_confirmation(callback_query: CallbackQuery):
-    await callback_handler.handle_delete_confirmation(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data.startswith("edit_select_"))
 async def handle_edit_selection(callback_query: CallbackQuery):
-    await callback_handler.handle_edit_selection(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 @dp.callback_query(F.data == "exit_edit")
 async def handle_exit_edit(callback_query: CallbackQuery):
-    await callback_handler.handle_exit_edit(callback_query)
+    await callback_handler.handle_callback(callback_query)
 
 
 
