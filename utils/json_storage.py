@@ -4,55 +4,37 @@ import threading
 import datetime
 from typing import Dict, Any
 
-
 class JSONStorage:
     def __init__(self, path: str):
         self.path = path
         self.lock = threading.Lock()
         self.db = None
+        os.makedirs(self.path, exist_ok=True)
     
     def set_db(self, db):
         self.db = db
     
     def secure_load(self, user_id: int) -> Dict[str, Any]:
-        """
-        Securely load user data after validating user exists.
-        Raises ValueError if user is invalid (deleted or unauthorized).
-        """
         if self.db and not self.db.is_valid_user(user_id, self):
             raise ValueError("Invalid user - deleted or unauthorized")
         return self.load(user_id)
     
     def get_restart_message(self, lang: str = "fa") -> str:
-        messages = {
-            "fa": "لطفا جهت دریافت آپدیت ربات با ارسال دستور /start ربات را مجدد راه اندازی کنید🙏",
-            "en": "Please restart the bot by sending /start command to receive updates🙏",
-            "ar": "يرجى إعادة تشغيل البوت بإرسال الأمر /start لتلقي التحديثات🙏",
-            "ru": "Пожалуйста, перезапустите бота, отправив команду /start для получения обновлений🙏"
-        }
-        return messages.get(lang, messages["fa"])
-        os.makedirs(self.path, exist_ok=True)
-        
+        # Use localization system instead of hard-coded messages
+        from config.localization_manager import LocalizationManager
+        loc_manager = LocalizationManager()
+        return loc_manager.get_text(lang, "update_notification")
+    
     def file(self, user_id: int) -> str:
         return os.path.join(self.path, f"{user_id}.json")
         
     def load(self, user_id: int) -> Dict[str, Any]:
-        """
-        Load user data from storage file.
-        Creates default data if file doesn't exist.
-        Raises PermissionError if user is not valid.
-        """
         with self.lock:
-            # Security check: prevent deleted users from creating files
             if self.db and not self.db.is_valid_user(user_id, self):
                 raise PermissionError(f"Access denied for user {user_id}")
+                
             p = self.file(user_id)
-            default_data = {
-                "user_id": user_id,
-                "reminders": {"active": [], "completed": [], "cancelled": []},
-                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "reminder_creation_count": 0},
-                "activity": {"last_activity": datetime.datetime.now().isoformat()}
-            }
+            default_data = self._get_default_data(user_id)
             
             if os.path.exists(p):
                 try:
@@ -63,20 +45,29 @@ class JSONStorage:
                         else:
                             raise json.JSONDecodeError("Invalid data structure", "", 0)
                 except (json.JSONDecodeError, IOError):
-                    with open(p, "w", encoding='utf-8') as w:
-                        json.dump(default_data, w, ensure_ascii=False, indent=2)
+                    self._save_file(p, default_data)
                     return default_data
             else:
-                with open(p, "w", encoding='utf-8') as w:
-                    json.dump(default_data, w, ensure_ascii=False, indent=2)
+                self._save_file(p, default_data)
                     
             return default_data
+    
+    def _get_default_data(self, user_id: int) -> Dict[str, Any]:
+        return {
+            "user_id": user_id,
+            "reminders": {"active": [], "completed": [], "cancelled": []},
+            "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "reminder_creation_count": 0},
+            "activity": {"last_activity": datetime.datetime.now().isoformat()}
+        }
+    
+    def _save_file(self, path: str, data: Dict[str, Any]) -> None:
+        with open(path, "w", encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
             
     def save(self, user_id: int, data: Dict[str, Any]) -> None:
         with self.lock:
             try:
-                with open(self.file(user_id), "w", encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
+                self._save_file(self.file(user_id), data)
             except IOError as e:
                 raise Exception(f"Failed to save user data: {e}")
                 
@@ -106,22 +97,7 @@ class JSONStorage:
             return data.get("settings", {}).get("language", "en")
         except Exception:
             return "en"
-            
-    def get_text(self, lang: str, key: str, **kwargs) -> str:
-        import os
-        base_path = os.path.dirname(__file__)
-        locale_file = os.path.join(base_path, "localization", f"{lang}.json")
-        
-        try:
-            with open(locale_file, 'r', encoding='utf-8') as f:
-                locales = json.load(f)
-                text = locales.get(key, key)
-                if kwargs:
-                    return text.format(**kwargs)
-                return text
-        except (FileNotFoundError, json.JSONDecodeError):
-            return key
-            
+    
     def increment_reminder_creation_count(self, user_id: int) -> int:
         data = self.load(user_id)
         if "settings" not in data:
