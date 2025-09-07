@@ -47,6 +47,7 @@ class Config:
         update_settings = self.config_data.get("bot", {}).get("update_notification", {})
         self.inactive_days_threshold: int = update_settings.get("inactive_days_threshold", 30)
         self.force_update_notification: bool = update_settings.get("force_update_notification", False)
+        self.force_update_timestamp: str = update_settings.get("force_update_timestamp", "")
         ai_logging_settings = self.config_data.get("bot", {}).get("ai_logging", {})
         self.ai_logging_enabled: bool = ai_logging_settings.get("enabled", True)
         self.ai_database_path: str = ai_logging_settings.get("database_path", "data/ai_logs.db")
@@ -56,15 +57,63 @@ class Config:
         self.config_data = self._load_config()
         self.log_channel_id = self.config_data.get("bot", {}).get("log_channel_id")
         self.admin_ids = self.config_data.get("bot", {}).get("admin_ids", [])
+        update_settings = self.config_data.get("bot", {}).get("update_notification", {})
+        self.force_update_notification = update_settings.get("force_update_notification", False)
+        self.force_update_timestamp = update_settings.get("force_update_timestamp", "")
         
     def update_force_update_notification(self, value: bool):
         self.force_update_notification = value
+        self._ensure_bot_config_structure()
+        self.config_data["bot"]["update_notification"]["force_update_notification"] = value
+        
+        if value:
+            import datetime
+            new_timestamp = datetime.datetime.now().isoformat()
+            self.force_update_timestamp = new_timestamp
+            self.config_data["bot"]["update_notification"]["force_update_timestamp"] = new_timestamp
+        else:
+            self.force_update_timestamp = ""
+            self.config_data["bot"]["update_notification"]["force_update_timestamp"] = ""
+        
+        self._save_config()
+    
+    def set_restart_timestamp(self):
+        import datetime
+        new_timestamp = datetime.datetime.now().isoformat()
+        self.force_update_timestamp = new_timestamp
+        self._ensure_bot_config_structure()
+        self.config_data["bot"]["update_notification"]["force_update_timestamp"] = new_timestamp
+        self._save_config()
+    
+    def _ensure_bot_config_structure(self):
         if "bot" not in self.config_data:
             self.config_data["bot"] = {}
         if "update_notification" not in self.config_data["bot"]:
             self.config_data["bot"]["update_notification"] = {}
-        self.config_data["bot"]["update_notification"]["force_update_notification"] = value
-        self._save_config()
+    
+    def _reset_all_users_force_update_status(self):
+        users_dir = "data/users/"
+        if not os.path.exists(users_dir):
+            return
+            
+        for filename in os.listdir(users_dir):
+            if not filename.endswith('.json'):
+                continue
+                
+            user_file = os.path.join(users_dir, filename)
+            try:
+                with open(user_file, 'r', encoding='utf-8') as f:
+                    user_data = json.load(f)
+                
+                if 'force_update_seen' in user_data:
+                    user_data['force_update_seen'] = False
+                    with open(user_file, 'w', encoding='utf-8') as f:
+                        json.dump(user_data, f, ensure_ascii=False, indent=2)
+                        
+            except (json.JSONDecodeError, IOError, PermissionError) as e:
+                print(f"Could not reset force_update_seen for {filename}: {e}")
+                continue
+    
         
     def _save_config(self):
         config_file = "config/config.json"

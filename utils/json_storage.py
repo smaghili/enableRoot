@@ -20,7 +20,7 @@ class JSONStorage:
             default_data = {
                 "user_id": user_id,
                 "reminders": {"active": [], "completed": [], "cancelled": []},
-                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "setup_complete": False, "reminder_creation_count": 0},
+                "settings": {"language": "fa", "timezone": "+03:30", "calendar": "shamsi", "reminder_creation_count": 0},
                 "activity": {"last_activity": datetime.datetime.now().isoformat()}
             }
             

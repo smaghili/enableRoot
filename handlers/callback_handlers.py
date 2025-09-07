@@ -30,7 +30,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.log_manager = log_manager
         self.user_request_times = {}
         self.date_converter = DateConverter()
-        self.update_checker = UpdateChecker(storage, config)
+        self.update_checker = UpdateChecker(storage)
         self.comp_logger = ComprehensiveLogger()
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -111,9 +111,8 @@ class ReminderCallbackHandler(IMessageHandler):
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
-            update_sent = await self.update_checker.send_update_notification_if_needed(
-                callback, user_id, lang, self.t
-            )
+            
+            update_sent = await self.update_checker.send_update_notification_if_needed(callback, user_id, lang, self.t)
             if update_sent:
                 await callback.answer()
                 return
@@ -123,6 +122,11 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_callback for user {user_id}: {e}")
             await callback.answer()
+            return
+        setup_callbacks = ["setup_lang_", "setup_calendar_", "confirm_tz_"]
+        is_setup_callback = any(callback.data.startswith(prefix) for prefix in setup_callbacks)
+        if not is_setup_callback and self.db.needs_start_after_restart(user_id):
+            await callback.answer(self.t(lang, "update_notification"), show_alert=True)
             return
         
         # Route to specific handler based on callback data
@@ -240,8 +244,8 @@ class ReminderCallbackHandler(IMessageHandler):
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
             self.storage.update_setting(user_id, "timezone", timezone)
-            is_setup = not data["settings"].get("setup_complete", False)
-            if is_setup:
+            is_new_user = self.db.is_new_user(user_id)
+            if is_new_user:
                 kb = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=self.t(lang, "calendar_shamsi"), callback_data="setup_calendar_shamsi")],
                     [InlineKeyboardButton(text=self.t(lang, "calendar_miladi"), callback_data="setup_calendar_miladi")],
@@ -301,14 +305,18 @@ class ReminderCallbackHandler(IMessageHandler):
                 self.db.update_status(reminder_id, "completed")
                 if reminder_id:
                     try:
-                        with self.db.lock:
-                            cur = self.db.conn.cursor()
-                            cur.execute(
-                                "UPDATE reminders SET status='cancelled' WHERE category='installment_retry' AND content LIKE ?",
-                                (f"%{reminder_id}%",)
-                            )
-                            self.db.conn.commit()
-                            cur.close()
+                        # Get original reminder content
+                        original_reminder = self.db.get_reminder_for_log(reminder_id)
+                        if original_reminder:
+                            original_content = original_reminder[3]  # index 3 is content
+                            with self.db.lock:
+                                cur = self.db.conn.cursor()
+                                cur.execute(
+                                    "UPDATE reminders SET status='cancelled' WHERE category='installment_retry' AND content LIKE ?",
+                                    (f"%{original_content}%",)
+                                )
+                                self.db.conn.commit()
+                                cur.close()
                     except Exception as e:
                         logger.error(f"Error cancelling retry reminders for {reminder_id}: {e}")
                 await callback_query.message.edit_text(self.t(lang, "payment_recorded"))
@@ -646,8 +654,6 @@ class ReminderCallbackHandler(IMessageHandler):
             # Set the calendar type
             self.storage.update_setting(user_id, "calendar", calendar_type)
             
-            # Mark setup as complete
-            self.storage.update_setting(user_id, "setup_complete", True)
             
             calendar_names = {
                 "shamsi": self.t(lang, "calendar_shamsi"),

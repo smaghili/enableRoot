@@ -42,6 +42,7 @@ create_secure_directory(config.users_path)
 bot = Bot(token=config.bot_token)
 dp = Dispatcher()
 db = Database(config.database_url)
+db.set_app_restart_time()
 storage = JSONStorage(config.users_path)
 log_manager = LogManager(bot, config, storage)
 ai = AIHandler(config.openrouter_key, config.ai_model, config)
@@ -91,6 +92,9 @@ admin_handler = AdminHandler(storage, db, bot, config, locales)
 message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config, admin_handler)
 callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config, admin_handler, log_manager)
 
+shared_update_checker = message_handler.update_checker
+callback_handler.update_checker = shared_update_checker
+
 @dp.message(Command("start"))
 async def start_message(message: Message):
     user_id = message.from_user.id
@@ -98,37 +102,31 @@ async def start_message(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
-    if config.force_update_notification:
-        config.update_force_update_notification(False)
+    is_new_user = db.is_new_user(user_id)
+    db.record_user_start(user_id)
+    
+    if is_new_user:
+        kb = MenuFactory.create_language_selection_keyboard()
+        await message.answer(
+            "🎉 Welcome to Smart Reminder Bot!\n"
+            "🌍 Please choose your language:",
+            reply_markup=kb
+        )
+        return
     
     data = storage.load(user_id)
-    is_new_user = not data.get("settings", {}).get("setup_complete", False)
+    lang = data.get("settings", {}).get("language", "fa")
     
-    if config.forced_join.get("enabled", False) and not is_new_user:
+    if config.forced_join.get("enabled", False):
         if not await admin_handler.check_user_membership(user_id):
-            lang = data.get("settings", {}).get("language", "fa")
             kb = await admin_handler.get_join_keyboard(lang)
             await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
             return
     
-    try:
-        if is_new_user:
-            kb = MenuFactory.create_language_selection_keyboard()
-            await message.answer(
-                "🎉 Welcome to Smart Reminder Bot!\n"
-                "🌍 Please choose your language:",
-                reply_markup=kb
-            )
-        else:
-            lang = data.get("settings", {}).get("language", "fa")
-            await message.answer(message_handler.t(lang, "start"))
-            
-            kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
-            await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
-        storage.save(user_id, data)
-    except Exception as e:
-        logger.error(f"Error in start_message for user {user_id}: {e}")
-        return
+    message_handler.update_checker.mark_user_as_updated(user_id)
+    await message.answer(message_handler.t(lang, "start"))
+    kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
+    await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
 
 @dp.message(Command("list"))
 async def list_reminders(message: Message):
@@ -139,6 +137,7 @@ async def list_reminders(message: Message):
     try:
         data = storage.load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
+        
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
         user_timezone = data.get("settings", {}).get("timezone", "+03:30")
         reminders = db.list(user_id)
@@ -164,6 +163,7 @@ async def show_reminders_list(message: Message):
     try:
         data = storage.load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
+        
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
         user_timezone = data.get("settings", {}).get("timezone", "+03:30")
         reminders = db.list(user_id)
@@ -193,6 +193,7 @@ async def show_today_reminders(message: Message):
     try:
         data = storage.load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
+        
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
         user_timezone = data.get("settings", {}).get("timezone", "+03:30")
         today_reminders = db.get_today_reminders(user_id, user_timezone)
@@ -221,7 +222,9 @@ async def delete_reminder(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
+        data = storage.load(user_id)
+        lang = data.get("settings", {}).get("language", "fa")
+        
         parts = message.text.split()
         if len(parts) > 1:
             try:
@@ -251,6 +254,7 @@ async def show_delete_reminders(message: Message):
     try:
         data = storage.load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
+        
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
         user_timezone = data.get("settings", {}).get("timezone", "+03:30")
         reminders = db.list(user_id)
@@ -281,6 +285,7 @@ async def show_edit_reminders(message: Message):
     try:
         data = storage.load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
+        
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
         user_timezone = data.get("settings", {}).get("timezone", "+03:30")
         reminders = db.list(user_id)
@@ -310,7 +315,9 @@ async def show_menu(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
+        data = storage.load(user_id)
+        lang = data.get("settings", {}).get("language", "fa")
+        
     except Exception as e:
         logger.error(f"Error in show_menu for user {user_id}: {e}")
         return
@@ -325,6 +332,15 @@ async def handle_menu_buttons(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
+    if db.needs_start_after_restart(user_id):
+        try:
+            data = storage.load(user_id)
+            lang = data.get("settings", {}).get("language", "fa")
+        except:
+            lang = "fa"
+        await message.answer(message_handler.t(lang, "update_notification"))
+        return
+    
     if config.forced_join.get("enabled", False) and not admin_handler.is_admin(user_id):
         if not await admin_handler.check_user_membership(user_id):
             data = storage.load(user_id)
@@ -334,14 +350,12 @@ async def handle_menu_buttons(message: Message):
             return
     
     try:
-        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
-        
-        # Check for update notification
         update_sent = await message_handler.update_checker.send_update_notification_if_needed(
-            message, user_id, lang, message_handler.t
+            message, user_id, storage.load(user_id).get("settings", {}).get("language", "fa"), message_handler.t
         )
         if update_sent:
             return
+        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
         
         if message.text == message_handler.t(lang, "btn_admin") and admin_handler.is_admin(user_id):
             await admin_handler.show_admin_panel(message)
@@ -507,6 +521,10 @@ async def cleanup_memory():
 
 async def main():
     try:
+        if config.force_update_notification:
+            config.set_restart_timestamp()
+            logger.info(f"🔄 Restart timestamp set: {config.force_update_timestamp}")
+        
         logger.info("🔧 Running startup fix for overdue reminders...")
         startup_fixer = StartupFixer(db, storage)
         fixed_count = startup_fixer.fix_all_overdue_reminders()

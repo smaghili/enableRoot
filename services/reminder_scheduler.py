@@ -163,6 +163,11 @@ class ReminderScheduler(IScheduler):
 
     async def _handle_installment_reminder(self, rid, uid, time_str, repeat):
         try:
+            original_reminder = self.db.get_reminder_for_log(rid)
+            if not original_reminder or original_reminder[7] != "active":
+                self.logger.info(f"Skipping retry creation for reminder {rid} - already completed/cancelled")
+                return
+            
             with self.db.lock:
                 cur = self.db.conn.cursor()
                 cur.execute(
@@ -180,11 +185,15 @@ class ReminderScheduler(IScheduler):
             if retry_count < 3:
                 dt_local = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
                 next_day = dt_local + datetime.timedelta(days=1)
+                user_data = self.json_storage.load(uid)
+                user_lang = user_data.get("settings", {}).get("language", "fa")
+                original_reminder = self.db.get_reminder_for_log(rid)
+                original_content = original_reminder[3] if original_reminder else f'یادآور {rid}'
                 
                 self.db.add(
                     uid,
                     "installment_retry", 
-                    f"Retry #{retry_count + 1} for reminder {rid}",
+                    self.t(user_lang, "retry_reminder", count=retry_count + 1, content=original_content),
                     next_day.strftime("%Y-%m-%d %H:%M"),
                     tz,
                     '{"type": "none"}'

@@ -29,7 +29,7 @@ class ReminderMessageHandler(IMessageHandler):
         self.user_message_count = {}
         self.waiting_for_city = {}
         self.date_converter = DateConverter()
-        self.update_checker = UpdateChecker(storage, config)
+        self.update_checker = UpdateChecker(storage, db)
         self.comp_logger = ComprehensiveLogger()
 
     def t(self, lang, key, **kwargs):
@@ -114,9 +114,8 @@ class ReminderMessageHandler(IMessageHandler):
         try:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
-            update_sent = await self.update_checker.send_update_notification_if_needed(
-                message, user_id, lang, self.t
-            )
+            
+            update_sent = await self.update_checker.send_update_notification_if_needed(message, user_id, lang, self.t)
             if update_sent:
                 return
             
@@ -136,7 +135,8 @@ class ReminderMessageHandler(IMessageHandler):
                     await self.handle_edit_input(message)
                     return
             
-            if not data["settings"].get("setup_complete", False):
+            if self.db.needs_start_after_restart(user_id):
+                await message.answer(self.t(lang, "update_notification"))
                 return
             
             button_action = self.get_button_action(message.text, lang)
@@ -223,7 +223,7 @@ class ReminderMessageHandler(IMessageHandler):
             city, timezone = timezone_info
             kb = MenuFactory.create_timezone_confirmation_keyboard(lang, self.t, timezone)
             user_data = self.storage.load(user_id)
-            if user_id in self.waiting_for_city and not user_data["settings"].get("setup_complete", False):
+            if user_id in self.waiting_for_city and self.db.is_new_user(user_id):
                 confirmation_text = self.t(lang, "setup_timezone_confirmation").format(city=city, timezone=timezone)
             else:
                 confirmation_text = self.t(lang, "timezone_confirmation").format(city=city, timezone=timezone)

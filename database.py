@@ -55,6 +55,23 @@ class Database:
                 )
                 """
             )
+            self.conn.execute(
+                """
+                create table if not exists users(
+                    user_id integer primary key,
+                    last_start_date text,
+                    created_date text
+                )
+                """
+            )
+            self.conn.execute(
+                """
+                create table if not exists app_state(
+                    key text primary key,
+                    value text
+                )
+                """
+            )
             self._create_indexes()
             # Ensure backward compatibility: add meta column if missing
             try:
@@ -68,7 +85,8 @@ class Database:
                 "CREATE INDEX IF NOT EXISTS idx_user_status ON reminders(user_id, status)",
                 "CREATE INDEX IF NOT EXISTS idx_status_time ON reminders(status, time)",
                 "CREATE INDEX IF NOT EXISTS idx_user_id ON reminders(user_id)",
-                "CREATE INDEX IF NOT EXISTS idx_due_reminders ON reminders(status, time) WHERE status='active'"
+                "CREATE INDEX IF NOT EXISTS idx_due_reminders ON reminders(status, time) WHERE status='active'",
+                "CREATE INDEX IF NOT EXISTS idx_users_start_date ON users(last_start_date)"
             ]
             for index in indexes:
                 self.conn.execute(index)
@@ -355,6 +373,70 @@ class Database:
                 'total_birthdays': total_birthdays,
                 'category_stats': category_stats
             }
+
+
+    def record_user_start(self, user_id):
+        with self.lock, self.conn:
+            current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            self.conn.execute(
+                "INSERT OR REPLACE INTO users(user_id, last_start_date, created_date) VALUES(?, ?, COALESCE((SELECT created_date FROM users WHERE user_id = ?), ?))",
+                (user_id, current_time, user_id, current_time)
+            )
+
+    def set_app_restart_time(self):
+        with self.lock, self.conn:
+            current_time = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M")
+            self.conn.execute(
+                "INSERT OR REPLACE INTO app_state(key, value) VALUES(?, ?)",
+                ("last_restart", current_time)
+            )
+
+    def get_app_restart_time(self):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT value FROM app_state WHERE key = ?", ("last_restart",))
+            result = cur.fetchone()
+            cur.close()
+            return result[0] if result else None
+
+    def is_new_user(self, user_id):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT last_start_date FROM users WHERE user_id = ?", (user_id,))
+            result = cur.fetchone()
+            cur.close()
+            return result is None
+
+    def needs_start_after_restart(self, user_id):
+        with self.lock:
+            cur = self.conn.cursor()
+            cur.execute("SELECT last_start_date FROM users WHERE user_id = ?", (user_id,))
+            result = cur.fetchone()
+            
+            if result is None:
+                cur.close()
+                return True
+            
+            user_last_start = result[0]
+            if user_last_start is None:
+                cur.close()
+                return True
+            
+            cur.execute("SELECT value FROM app_state WHERE key = ?", ("last_restart",))
+            restart_result = cur.fetchone()
+            cur.close()
+            
+            if restart_result is None:
+                return False
+            
+            app_restart_time = restart_result[0]
+            
+            try:
+                user_start_dt = datetime.datetime.strptime(user_last_start, "%Y-%m-%d %H:%M")
+                app_restart_dt = datetime.datetime.strptime(app_restart_time, "%Y-%m-%d %H:%M")
+                return user_start_dt < app_restart_dt
+            except (ValueError, TypeError):
+                return True
 
     def close(self):
         with self.lock:
