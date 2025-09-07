@@ -101,11 +101,10 @@ async def start_message(message: Message):
     if not message_handler.rate_limit_check(user_id):
         await message_handler.handle_rate_limit(message)
         return
-    
-    needs_restart = db.needs_start_after_restart(user_id)
+    is_new_user = db.is_new_user(user_id)
     db.record_user_start(user_id)
     
-    if needs_restart:
+    if is_new_user:
         kb = MenuFactory.create_language_selection_keyboard()
         await message.answer(
             "🎉 Welcome to Smart Reminder Bot!\n"
@@ -119,13 +118,7 @@ async def start_message(message: Message):
         lang = data.get("settings", {}).get("language", "fa")
     except Exception as e:
         logger.error(f"Error loading user data for {user_id}: {e}")
-        kb = MenuFactory.create_language_selection_keyboard()
-        await message.answer(
-            "🎉 Welcome to Smart Reminder Bot!\n"
-            "🌍 Please choose your language:",
-            reply_markup=kb
-        )
-        return
+        lang = "fa"
     
     if config.forced_join.get("enabled", False):
         if not await admin_handler.check_user_membership(user_id):
