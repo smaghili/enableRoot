@@ -351,7 +351,8 @@ async def handle_menu_buttons(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
-    if db.needs_start_after_restart(user_id):
+    is_new_user = db.is_new_user(user_id)
+    if not is_new_user and db.needs_start_after_restart(user_id):
         try:
             data = storage.load(user_id)
             lang = data.get("settings", {}).get("language", "fa")

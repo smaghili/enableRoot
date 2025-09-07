@@ -125,7 +125,8 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         setup_callbacks = ["setup_lang_", "setup_calendar_", "confirm_tz_"]
         is_setup_callback = any(callback.data.startswith(prefix) for prefix in setup_callbacks)
-        if not is_setup_callback and self.db.needs_start_after_restart(user_id):
+        is_new_user = self.db.is_new_user(user_id)
+        if not is_setup_callback and not is_new_user and self.db.needs_start_after_restart(user_id):
             await callback.answer(self.t(lang, "update_notification"), show_alert=True)
             return
         
