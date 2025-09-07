@@ -9,6 +9,9 @@ class AdminLogChannelManager(BaseAdminManager):
     def __init__(self, storage, config, locales):
         super().__init__(storage, config, locales)
         self.waiting_for_log_channel = set()
+    
+    async def get_operation_prompt(self, lang: str, operation_key: str) -> str:
+        return self.t(lang, "admin_enter_log_channel")
 
     async def handle_log_channel_setup(self, message: Message, lang: str):
         current_log_channel = self.get_current_log_channel()

@@ -11,6 +11,13 @@ class AdminBroadcastManager(BaseAdminManager):
         self.waiting_for_broadcast = set()
         self.waiting_for_private_message = {}
         self.waiting_for_private_user_id = set()
+    
+    async def get_operation_prompt(self, lang: str, operation_key: str) -> str:
+        if operation_key == "broadcast":
+            return self.t(lang, "admin_enter_broadcast")
+        elif operation_key == "private_message":
+            return self.t(lang, "admin_enter_user_id_private")
+        return "Enter required information:"
 
     async def handle_broadcast_start(self, message: Message, lang: str):
         self.waiting_for_broadcast.add(message.from_user.id)

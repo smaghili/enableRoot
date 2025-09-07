@@ -452,12 +452,17 @@ class ReminderCallbackHandler(IMessageHandler):
                     reminder_data["time"] = reminder_data["time"]
                     meta = None
                     try:
+                        meta_data = {}
+                        # Add birthday data if applicable
                         if reminder.get("category") == "birthday" and reminder.get("specific_date"):
                             from utils.date_parser import DateParser
                             dp = DateParser()
                             birth_dt = dp.convert_to_gregorian(reminder.get("specific_date"))
                             if birth_dt:
-                                meta = json.dumps({"birthdate_gregorian": birth_dt.strftime("%Y-%m-%d")})
+                                meta_data["birthdate_gregorian"] = birth_dt.strftime("%Y-%m-%d")
+                        
+                        if meta_data:
+                            meta = json.dumps(meta_data)
                     except Exception:
                         meta = None
                     reminder_id = self.db.add(
@@ -486,7 +491,7 @@ class ReminderCallbackHandler(IMessageHandler):
                     if self.log_manager:
                         await self.log_manager.send_reminder_log(
                             reminder_id, user_id, reminder_data["category"], 
-                            reminder_data["content"], "created", original_message, 
+                            reminder_data["content"], "created", "", 
                             reminder_data["content"]
                         )
                     created_count += 1
@@ -505,12 +510,17 @@ class ReminderCallbackHandler(IMessageHandler):
                 reminder_data["time"] = reminder_data["time"]
                 meta = None
                 try:
+                    meta_data = {}
+                    # Add birthday data if applicable
                     if pending_data.get("category") == "birthday" and pending_data.get("specific_date"):
                         from utils.date_parser import DateParser
                         dp = DateParser()
                         birth_dt = dp.convert_to_gregorian(pending_data.get("specific_date"))
                         if birth_dt:
-                            meta = json.dumps({"birthdate_gregorian": birth_dt.strftime("%Y-%m-%d")})
+                            meta_data["birthdate_gregorian"] = birth_dt.strftime("%Y-%m-%d")
+                    
+                    if meta_data:
+                        meta = json.dumps(meta_data)
                 except Exception:
                     meta = None
                 reminder_id = self.db.add(
@@ -539,7 +549,7 @@ class ReminderCallbackHandler(IMessageHandler):
                 if self.log_manager:
                     await self.log_manager.send_reminder_log(
                         reminder_id, user_id, reminder_data["category"], 
-                        reminder_data["content"], "created", original_message, 
+                        reminder_data["content"], "created", "", 
                         reminder_data["content"]
                     )
 

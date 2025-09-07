@@ -9,6 +9,10 @@ class AdminUserLimitManager(BaseAdminManager):
     def __init__(self, storage, config, locales):
         super().__init__(storage, config, locales)
         self.waiting_for_limit = set()
+    
+    async def get_operation_prompt(self, lang: str, operation_key: str) -> str:
+        current_limit = self.get_current_limit_from_config()
+        return self.t(lang, "admin_current_limit").format(limit=current_limit)
 
     async def handle_user_limit(self, message: Message, lang: str):
         current_limit = self.get_current_limit_from_config()

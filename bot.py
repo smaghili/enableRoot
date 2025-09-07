@@ -351,7 +351,7 @@ async def handle_menu_buttons(message: Message):
             await admin_handler.handle_admin_button(message)
             return
         
-        if (user_id in admin_handler.user_manager.waiting_for_admin_id or 
+        if (admin_handler.user_manager.is_operation_active(user_id) or 
             user_id in admin_handler.broadcast_manager.waiting_for_broadcast or 
             user_id in admin_handler.broadcast_manager.waiting_for_private_user_id or
             user_id in admin_handler.broadcast_manager.waiting_for_private_message or 
@@ -359,7 +359,7 @@ async def handle_menu_buttons(message: Message):
             user_id in admin_handler.user_limit_manager.waiting_for_limit or
             user_id in admin_handler.user_deletion_manager.waiting_for_delete_user or
             user_id in admin_handler.log_channel_manager.waiting_for_log_channel or
-            user_id in admin_handler.log_export_manager.waiting_for_reminder_id):
+            admin_handler.log_export_manager.is_operation_active(user_id)):
             await admin_handler.handle_admin_message(message)
             return
         

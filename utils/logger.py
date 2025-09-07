@@ -18,73 +18,93 @@ class LogManager:
             return config_data.get("bot", {}).get("log_channel_id")
         except Exception:
             return self.config.log_channel_id if hasattr(self.config, 'log_channel_id') else None
+    
+    def _get_original_message_from_ai_logs(self, content):
+        try:
+            import sqlite3
+            ai_db_path = getattr(self.config, 'ai_database_path', "data/ai_logs.db")
+            with sqlite3.connect(ai_db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT original_message FROM ai_logs WHERE parsed_result LIKE ? AND original_message IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
+                    (f'%{content}%',)
+                )
+                result = cursor.fetchone()
+                if result and result[0]:
+                    return result[0]
+        except Exception as e:
+            logger.error(f"Error getting original message from AI logs: {e}")
+        return ""
+
+    def _get_category_emoji(self, category):
+        emojis = {
+            'birthday': '🎂', 'medicine': '💊', 'appointment': '📅', 'work': '💼',
+            'exercise': '🏃‍♂️', 'prayer': '🕌', 'shopping': '🛒', 'call': '📞',
+            'study': '📚', 'installment': '💳', 'bill': '💰', 'general': '⏰'
+        }
+        return emojis.get(category, '⏰')
+    
+    async def _get_user_info(self, user_id):
+        """Get user information"""
+        user_data = self.storage.load(user_id)
+        settings = user_data.get("settings", {})
+        
+        try:
+            chat = await self.bot.get_chat(user_id)
+            user_name = chat.first_name or "Unknown"
+            username = chat.username or "Unknown"
+        except:
+            user_name = "Unknown"
+            username = "Unknown"
+        
+        return {
+            'name': user_name,
+            'username': f"@{username}" if username != "Unknown" else "Unknown",
+            'language': settings.get("language", "fa"),
+            'calendar': settings.get("calendar", "shamsi"),
+            'timezone': settings.get("timezone", "+03:30")
+        }
+    
+    def _build_log_message(self, reminder_id, user_info, category, content, reminder_type, original_message, ai_detected_text, bot_username):
+        parts = []
+        if original_message:
+            parts.append(f"📝 original_message: {original_message}")
+        if ai_detected_text:
+            parts.append(f"🤖 ai_detected: {ai_detected_text}")
+        parts.extend([
+            f"🆔 reminder_id: {reminder_id}",
+            "",
+            content,
+            f"{self._get_category_emoji(category)} {bot_username}",
+            f"👤 name: {user_info['name']}",
+            f"🆔 username: {user_info['username']}",
+            f"📱 chat_id: {user_info.get('user_id', '')}",
+            f"🉐 language: {user_info['language']}",
+            f"📅 calendar: {user_info['calendar']}",
+            f"🕐 timezone: {user_info['timezone']}",
+            f"🆔 {bot_username}",
+            f"#{reminder_type}" if reminder_type else ""
+        ])
+        return "\n".join(parts)
 
     async def send_reminder_log(self, reminder_id, user_id, category, content, reminder_type="created", original_message="", ai_detected_text=""):
         log_channel_id = self._get_current_log_channel()
         if not log_channel_id:
             return
+            
+        if not original_message:
+            original_message = self._get_original_message_from_ai_logs(content)
         
         try:
-            user_data = self.storage.load(user_id)
-            language = user_data.get("settings", {}).get("language", "fa")
-            calendar = user_data.get("settings", {}).get("calendar", "shamsi")
-            timezone = user_data.get("settings", {}).get("timezone", "+03:30")
-            
-            try:
-                chat = await self.bot.get_chat(user_id)
-                user_name = chat.first_name or "Unknown"
-                username = chat.username or "Unknown"
-            except:
-                user_name = "Unknown"
-                username = "Unknown"
-            
-            username_display = f"@{username}" if username != "Unknown" else "Unknown"
-            
-            category_emojis = {
-                'birthday': '🎂',
-                'medicine': '💊',
-                'appointment': '📅',
-                'work': '💼',
-                'exercise': '🏃‍♂️',
-                'prayer': '🕌',
-                'shopping': '🛒',
-                'call': '📞',
-                'study': '📚',
-                'installment': '💳',
-                'bill': '💰',
-                'general': '⏰'
-            }
-            
-            emoji = category_emojis.get(category, '⏰')
+            user_info = await self._get_user_info(user_id)
+            user_info['user_id'] = user_id
             
             bot_info = await self.bot.get_me()
             bot_username = f"@{bot_info.username}" if bot_info.username else "Bot"
             
-            reminder_type_hashtag = f"#{reminder_type}" if reminder_type else ""
-            
-            # Format the log message with original message, AI detected text, and reminder ID
-            log_message_parts = []
-            
-            if original_message:
-                log_message_parts.append(f"📝 original_message: {original_message}")
-            
-            if ai_detected_text:
-                log_message_parts.append(f"🤖 ai_detected: {ai_detected_text}")
-            
-            log_message_parts.append(f"🆔 reminder_id: {reminder_id}")
-            log_message_parts.append("")  # Empty line for separation
-            log_message_parts.append(f"{content}")
-            log_message_parts.append(f"{emoji} {bot_username}")
-            log_message_parts.append(f"👤 name: {user_name}")
-            log_message_parts.append(f"🆔 username: {username_display}")
-            log_message_parts.append(f"📱 chat_id: {user_id}")
-            log_message_parts.append(f"🉐 language: {language}")
-            log_message_parts.append(f"📅 calendar: {calendar}")
-            log_message_parts.append(f"🕐 timezone: {timezone}")
-            log_message_parts.append(f"🆔 {bot_username}")
-            log_message_parts.append(f"{reminder_type_hashtag}")
-            
-            log_message = "\n".join(log_message_parts)
+            log_message = self._build_log_message(
+                reminder_id, user_info, category, content, 
+                reminder_type, original_message, ai_detected_text, bot_username
+            )
 
             await self.bot.send_message(log_channel_id, log_message)
             

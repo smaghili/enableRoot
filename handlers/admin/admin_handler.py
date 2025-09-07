@@ -99,7 +99,7 @@ class AdminHandler:
 
     async def handle_cancel_operation(self, message: Message, lang: str):
         user_id = message.from_user.id
-        self.user_manager.waiting_for_admin_id.discard(user_id)
+        self.user_manager.cancel_operation(user_id)
         self.broadcast_manager.waiting_for_broadcast.discard(user_id)
         self.forced_join_manager.waiting_for_channel.discard(user_id)
         self.broadcast_manager.waiting_for_private_user_id.discard(user_id)
@@ -109,6 +109,7 @@ class AdminHandler:
         self.log_channel_manager.waiting_for_log_channel.discard(user_id)
         self.user_limit_manager.waiting_for_limit.discard(user_id)
         self.forced_join_manager.in_forced_join_menu.discard(user_id)
+        self.log_export_manager.cancel_operation(user_id)
         await self.show_admin_panel(message)
 
     async def handle_back_to_main(self, message: Message, lang: str):
@@ -125,8 +126,8 @@ class AdminHandler:
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
             
-            if user_id in self.user_manager.waiting_for_admin_id:
-                await self.user_manager.process_add_admin(message, lang)
+            if self.user_manager.is_operation_active(user_id):
+                await self.user_manager.process_add_admin(message)
             elif user_id in self.broadcast_manager.waiting_for_broadcast:
                 await self.broadcast_manager.process_broadcast(message, lang)
             elif user_id in self.broadcast_manager.waiting_for_private_user_id:
@@ -141,7 +142,7 @@ class AdminHandler:
                 await self.user_deletion_manager.process_delete_user(message, lang)
             elif user_id in self.log_channel_manager.waiting_for_log_channel:
                 await self.log_channel_manager.process_log_channel(message, lang)
-            elif user_id in self.log_export_manager.waiting_for_reminder_id:
+            elif self.log_export_manager.is_operation_active(user_id):
                 await self.log_export_manager.handle_reminder_id_input(message)
                 
         except Exception as e:

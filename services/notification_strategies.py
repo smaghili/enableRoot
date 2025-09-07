@@ -43,7 +43,9 @@ class TelegramNotificationStrategy(NotificationStrategy):
             self.logger.info(f"Sent {category} reminder {reminder_id} to user {user_id}")
             if self.log_manager:
                 await self.log_manager.send_reminder_log(
-                    reminder_id, user_id, category, content, "sent"
+                    reminder_id, user_id, category, content, "sent", 
+                    "", 
+                    content
                 )
             
             return True

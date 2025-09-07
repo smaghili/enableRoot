@@ -2,21 +2,24 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 import logging
 import json
 from .base_admin_manager import BaseAdminManager
+from utils.admin_decorators import admin_operation, requires_admin_input
 
 logger = logging.getLogger(__name__)
 
 class AdminUserManager(BaseAdminManager):
     def __init__(self, storage, config, locales):
         super().__init__(storage, config, locales)
-        self.waiting_for_admin_id = set()
 
     def is_admin(self, user_id):
         return user_id in self.config.admin_ids
 
+    async def get_operation_prompt(self, lang: str, operation_key: str) -> str:
+        if operation_key == "add_admin":
+            return self.t(lang, "admin_enter_user_id")
+        return "Enter required information:"
+    
     async def handle_add_admin(self, message: Message, lang: str):
-        self.waiting_for_admin_id.add(message.from_user.id)
-        kb = self.create_cancel_keyboard(lang)
-        await message.answer(self.t(lang, "admin_enter_user_id"), reply_markup=kb)
+        await self.start_operation(message, "add_admin")
 
     async def handle_remove_admin(self, message: Message, lang: str):
         user_id = message.from_user.id
@@ -46,36 +49,27 @@ class AdminUserManager(BaseAdminManager):
             logger.error(f"Error in handle_remove_admin: {e}")
             await message.answer(self.t(lang, "admin_error"))
 
-    async def process_add_admin(self, message: Message, lang: str):
-        user_id = message.from_user.id
-        try:
-            new_admin_id = int(message.text.strip())
+    @requires_admin_input('user_id')
+    async def process_add_admin(self, message: Message, new_admin_id: int):
+        """Process adding a new admin"""
+        data = self.storage.load(message.from_user.id)
+        lang = data["settings"]["language"]
+        
+        config_data = {}
+        with open("config/config.json", "r") as f:
+            config_data = json.load(f)
+        
+        if new_admin_id not in config_data["bot"]["admin_ids"]:
+            config_data["bot"]["admin_ids"].append(new_admin_id)
             
-            config_data = {}
-            with open("config/config.json", "r") as f:
-                config_data = json.load(f)
+            with open("config/config.json", "w") as f:
+                json.dump(config_data, f, indent=2)
             
-            if new_admin_id not in config_data["bot"]["admin_ids"]:
-                config_data["bot"]["admin_ids"].append(new_admin_id)
-                
-                with open("config/config.json", "w") as f:
-                    json.dump(config_data, f, indent=2)
-                
-                await message.answer(self.t(lang, "admin_added_success").format(admin_id=new_admin_id))
-                self.waiting_for_admin_id.discard(user_id)
-                await self.return_to_admin_panel(message, lang)
-            else:
-                await message.answer(self.t(lang, "admin_already_exists"))
-                self.waiting_for_admin_id.discard(user_id)
-                await self.return_to_admin_panel(message, lang)
-                
-        except ValueError:
-            await message.answer(self.t(lang, "admin_invalid_id"))
-        except Exception as e:
-            logger.error(f"Error adding admin: {e}")
-            await message.answer(self.t(lang, "admin_error"))
-            self.waiting_for_admin_id.discard(user_id)
-            await self.return_to_admin_panel(message, lang)
+            await self.complete_operation(message, "admin_added_success", admin_id=new_admin_id)
+        else:
+            await self.handle_error(message, "admin_already_exists")
+        
+        return True
 
 
 

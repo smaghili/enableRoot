@@ -141,17 +141,15 @@ class ReminderMessageHandler(IMessageHandler):
             
             button_action = self.get_button_action(message.text, lang)
             if button_action:
-                
-                if button_action === "admin_export_logs":
+                if button_action == "admin_export_logs":
                     if self.admin_handler and self.admin_handler.is_admin(user_id):
                         await self.admin_handler.handle_admin_button(message)
                         return
                     else:
                         await message.answer(self.t(lang, "access_denied"))
                         return
-                else:
-                    # Main buttons should be handled by bot.py, not here
-                    return
+                await self.handle_button_action(message, button_action, lang)
+                return
             
             user_reminders = self.db.list(user_id)
             if self.config.max_reminders_per_user > 0 and len(user_reminders) >= self.config.max_reminders_per_user:

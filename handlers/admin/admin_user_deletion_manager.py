@@ -10,6 +10,9 @@ class AdminUserDeletionManager(BaseAdminManager):
         super().__init__(storage, config, locales)
         self.db = db
         self.waiting_for_delete_user = set()
+    
+    async def get_operation_prompt(self, lang: str, operation_key: str) -> str:
+        return self.t(lang, "enter_user_id_delete")
 
     async def handle_delete_user_start(self, message: Message, lang: str):
         self.waiting_for_delete_user.add(message.from_user.id)

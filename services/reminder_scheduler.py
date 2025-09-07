@@ -237,11 +237,27 @@ class ReminderScheduler(IScheduler):
             user_lang = "en"
             safe_content = str(content)[:500] if content else "No content"
         
+        original_message = ""
+        try:
+            import sqlite3
+            ai_db_path = getattr(self.config, 'ai_database_path', "data/ai_logs.db") if hasattr(self, 'config') else "data/ai_logs.db"
+            with sqlite3.connect(ai_db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT original_message FROM ai_logs WHERE parsed_result LIKE ? AND original_message IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
+                    (f'%{safe_content}%',)
+                )
+                result = cursor.fetchone()
+                if result and result[0]:
+                    original_message = result[0]
+        except Exception as e:
+            self.logger.error(f"Error getting original message from AI logs for reminder {rid}: {e}")
+        
         reminder_data = {
             'id': rid,
             'category': category,
             'content': safe_content,
-            'repeat': repeat
+            'repeat': repeat,
+            'original_message': original_message
         }
         success = await self.notification_context.send_notification(
             self.bot, uid, reminder_data, user_lang, self.t
