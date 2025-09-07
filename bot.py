@@ -102,10 +102,10 @@ async def start_message(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     
-    is_new_user = db.is_new_user(user_id)
+    needs_restart = db.needs_start_after_restart(user_id)
     db.record_user_start(user_id)
     
-    if is_new_user:
+    if needs_restart:
         kb = MenuFactory.create_language_selection_keyboard()
         await message.answer(
             "🎉 Welcome to Smart Reminder Bot!\n"
