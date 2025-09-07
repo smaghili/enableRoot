@@ -112,10 +112,13 @@ class ReminderCallbackHandler(IMessageHandler):
             data = self.storage.load(user_id)
             lang = data["settings"]["language"]
             
-            update_sent = await self.update_checker.send_update_notification_if_needed(callback, user_id, lang, self.t)
-            if update_sent:
-                await callback.answer()
-                return
+            # Skip update check for new users - they are in setup process
+            is_new_user_check = self.db.is_new_user(user_id)
+            if not is_new_user_check:
+                update_sent = await self.update_checker.send_update_notification_if_needed(callback, user_id, lang, self.t)
+                if update_sent:
+                    await callback.answer()
+                    return
             if not self.update_checker.config.force_update_notification:
                 self.storage.update_last_activity(user_id)
             
