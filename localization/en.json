@@ -110,8 +110,6 @@
   "admin_added_success": "✅ Admin with ID {admin_id} added",
   "admin_already_exists": "⚠️ This ID is already an admin",
   "admin_invalid_id": "❌ Please enter a valid numeric ID",
-  "admin_error": "❌ System error",
-  "admin_stats_report": "📊 Statistics:\n\n👤 Total bot users: {total_users} users\n🖍 Total bot admins: {admin_count} users\n\n🎂 Birthdays\nBirthdays registered today: {birthdays_today}\nBirthdays in the last week: {birthdays_week}\nBirthdays in the last month: {birthdays_month}\nTotal birthdays registered to date: {total_birthdays}\n\n📅 Other Reminders\nOther reminders registered today: {other_today}\nOther reminders in the last week: {other_week}\nOther reminders in the last month: {other_month}\nTotal other reminders registered to date: {total_other}",
   "admin_current_limit": "⚖️ Current limit per user: {limit} reminders\n\n💡 Zero means no limit\n\n📝 Enter new number:",
   "admin_enter_broadcast": "📢 Write your broadcast message:",
   "admin_broadcast_sent": "✅ Message sent to {count} users",
@@ -171,5 +169,6 @@
   "admin_no_logs_found": "❌ No logs found for reminder {reminder_id}",
   "admin_reminder_log_caption": "📊 Complete logs for reminder #{reminder_id}\n📁 Size: {size} KB",
   "admin_reminder_log_success": "✅ Complete logs for reminder #{reminder_id} sent!",
-  "admin_invalid_reminder_id": "❌ Invalid reminder ID. Please enter a number."
+  "admin_invalid_reminder_id": "❌ Invalid reminder ID. Please enter a number.",
+  "timezone_cancelled": "❌ Timezone setup cancelled. Please enter your city name again:"
 }

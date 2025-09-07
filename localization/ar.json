@@ -110,8 +110,6 @@
   "admin_added_success": "✅ تم إضافة مدير برقم {admin_id}",
   "admin_already_exists": "⚠️ هذا الرقم مدير بالفعل",
   "admin_invalid_id": "❌ يرجى إدخال رقم تعريف صحيح",
-  "admin_error": "❌ خطأ في النظام",
-  "admin_stats_report": "📊 الإحصائيات:\n\n👤 إجمالي مستخدمي البوت: {total_users} مستخدم\n🖍 إجمالي مدراء البوت: {admin_count} مستخدم\n\n🎂 أعياد الميلاد\nأعياد الميلاد المسجلة اليوم: {birthdays_today}\nأعياد الميلاد في الأسبوع الماضي: {birthdays_week}\nأعياد الميلاد في الشهر الماضي: {birthdays_month}\nإجمالي أعياد الميلاد المسجلة حتى اليوم: {total_birthdays}\n\n📅 تذكيرات أخرى\nالتذكيرات الأخرى المسجلة اليوم: {other_today}\nالتذكيرات الأخرى في الأسبوع الماضي: {other_week}\nالتذكيرات الأخرى في الشهر الماضي: {other_month}\nإجمالي التذكيرات الأخرى المسجلة حتى اليوم: {total_other}",
   "admin_current_limit": "⚖️ الحد الحالي لكل مستخدم: {limit} تذكير\n\n💡 الصفر يعني عدم وجود حد\n\n📝 أدخل الرقم الجديد:",
   "admin_enter_broadcast": "📢 اكتب رسالتك الجماعية:",
   "admin_broadcast_sent": "✅ تم إرسال الرسالة لـ {count} مستخدم",

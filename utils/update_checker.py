@@ -11,7 +11,25 @@ class UpdateChecker:
     def __init__(self, storage: JSONStorage, db=None):
         self.storage = storage
         self.db = db
+        self._config_cache = None
     
+    @property
+    def config(self):
+        if self._config_cache is None:
+            config_data = self._load_current_config()
+            update_settings = config_data.get("bot", {}).get("update_notification", {})
+            class ConfigObject:
+                def __init__(self, update_settings):
+                    self.force_update_notification = update_settings.get("force_update_notification", False)
+                    self.force_update_timestamp = update_settings.get("force_update_timestamp", "")
+            self._config_cache = ConfigObject(update_settings)
+        return self._config_cache
+    
+    def _get_force_update_notification(self):
+        config_data = self._load_current_config()
+        update_settings = config_data.get("bot", {}).get("update_notification", {})
+        return update_settings.get("force_update_notification", False)
+
     def _load_current_config(self):
         try:
             with open("config/config.json", 'r', encoding='utf-8') as f:

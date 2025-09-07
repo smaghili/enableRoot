@@ -267,7 +267,13 @@ class ReminderCallbackHandler(IMessageHandler):
         user_id = callback_query.from_user.id
         try:
             lang = self.storage.load(user_id)["settings"]["language"]
-            await callback_query.message.edit_text(self.t(lang, "timezone_cancelled"))
+            is_new_user = self.db.is_new_user(user_id)
+            if is_new_user:
+                await callback_query.message.edit_text(self.t(lang, "timezone_cancelled"))
+                self.message_handler.waiting_for_city[user_id] = True
+            else:
+                await callback_query.message.edit_text(self.t(lang, "timezone_cancelled"))
+            
             await callback_query.answer()
         except Exception as e:
             logger.error(f"Error in handle_timezone_cancel for user {user_id}: {e}")

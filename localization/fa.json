@@ -111,8 +111,6 @@
   "admin_added_success": "✅ مدیر با شناسه {admin_id} اضافه شد",
   "admin_already_exists": "⚠️ این شناسه قبلاً مدیر است",
   "admin_invalid_id": "❌ لطفاً شناسه عددی معتبر وارد کنید",
-  "admin_error": "❌ خطای سیستم",
-  "admin_stats_report": "📊 آمار:\n\n👤 تعداد کاربران ربات : {total_users} نفر\n🖍 تعداد ادمین های ربات :  {admin_count} نفر\n\n🎂  تولدها\nتعداد تولدهای ثبت شده امروز : {birthdays_today} \nتعداد تولدهای یک هفته اخیر : {birthdays_week} \nتعداد تولدهای  یک ماه اخیر : {birthdays_month} \nتعداد کل تولدهای ثبت شده تا امروز  : {total_birthdays} \n\n📅 سایر یادآوری ها\nتعداد سایر یادآوری های ثبت شده امروز : {other_today} \nتعداد سایر یادآوری های یک هفته اخیر : {other_week} \nتعداد سایر یادآوری های یک ماه اخیر : {other_month} \nتعداد کل سایر یادآوری های ثبت شده تا امروز  : {total_other} ",
   "admin_current_limit": "⚖️ محدودیت فعلی هر کاربر: {limit} یادآوری\n\n💡 عدد صفر به معنای عدم محدودیت است\n\n📝 عدد جدید را وارد کنید:",
   "admin_enter_broadcast": "📢 پیام عمومی خود را بنویسید:",
   "admin_broadcast_sent": "✅ پیام برای {count} کاربر ارسال شد",
@@ -172,5 +170,6 @@
   "admin_no_logs_found": "❌ هیچ لاگی برای یادآور {reminder_id} یافت نشد",
   "admin_reminder_log_caption": "📊 لاگ کامل یادآور #{reminder_id}\n📁 حجم: {size} KB",
   "admin_reminder_log_success": "✅ لاگ کامل یادآور #{reminder_id} ارسال شد!",
-  "admin_invalid_reminder_id": "❌ شناسه یادآور نامعتبر است. لطفاً عدد وارد کنید."
+  "admin_invalid_reminder_id": "❌ شناسه یادآور نامعتبر است. لطفاً عدد وارد کنید.",
+  "timezone_cancelled": "❌ تنظیم تایم‌زون لغو شد. لطفاً دوباره نام شهر خود را وارد کنید:"
 }
