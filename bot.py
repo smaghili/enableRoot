@@ -114,8 +114,18 @@ async def start_message(message: Message):
         )
         return
     
-    data = storage.load(user_id)
-    lang = data.get("settings", {}).get("language", "fa")
+    try:
+        data = storage.load(user_id)
+        lang = data.get("settings", {}).get("language", "fa")
+    except Exception as e:
+        logger.error(f"Error loading user data for {user_id}: {e}")
+        kb = MenuFactory.create_language_selection_keyboard()
+        await message.answer(
+            "🎉 Welcome to Smart Reminder Bot!\n"
+            "🌍 Please choose your language:",
+            reply_markup=kb
+        )
+        return
     
     if config.forced_join.get("enabled", False):
         if not await admin_handler.check_user_membership(user_id):
