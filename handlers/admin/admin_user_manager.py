@@ -52,7 +52,7 @@ class AdminUserManager(BaseAdminManager):
     @requires_admin_input('user_id')
     async def process_add_admin(self, message: Message, new_admin_id: int):
         """Process adding a new admin"""
-        data = self.storage.load(message.from_user.id)
+        data = self.storage.secure_load(message.from_user.id)
         lang = data["settings"]["language"]
         
         config_data = {}
@@ -80,7 +80,7 @@ class AdminUserManager(BaseAdminManager):
             return
         
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             
             if callback.data.startswith("remove_admin_"):

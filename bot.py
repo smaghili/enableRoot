@@ -44,6 +44,7 @@ dp = Dispatcher()
 db = Database(config.database_url)
 db.set_app_restart_time()
 storage = JSONStorage(config.users_path)
+storage.set_db(db)
 log_manager = LogManager(bot, config, storage)
 ai = AIHandler(config.openrouter_key, config.ai_model, config)
 scheduler = ReminderScheduler(db, storage, bot, log_manager)
@@ -88,6 +89,27 @@ class UserSession:
 
 session = UserSession()
 
+async def safe_get_lang(user_id: int, default: str = "fa") -> str:
+    try:
+        data = storage.secure_load(user_id)
+        return data.get("settings", {}).get("language", default)
+    except ValueError:
+        return None
+    except Exception:
+        return default
+
+async def handle_invalid_user(message_or_callback, user_id: int):
+    lang = await safe_get_lang(user_id)
+    if lang is None:
+        restart_msg = storage.get_restart_message()
+        if hasattr(message_or_callback, 'answer'):
+            if hasattr(message_or_callback, 'message'):
+                await message_or_callback.answer(restart_msg, show_alert=True)
+            else:
+                await message_or_callback.answer(restart_msg)
+        return True
+    return False
+
 admin_handler = AdminHandler(storage, db, bot, config, locales)
 message_handler = ReminderMessageHandler(storage, db, ai, repeat_handler, locales, session, config, admin_handler)
 callback_handler = ReminderCallbackHandler(storage, db, ai, repeat_handler, locales, message_handler, session, config, admin_handler, log_manager)
@@ -102,7 +124,6 @@ async def start_message(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     is_new_user = db.is_new_user(user_id)
-    db.record_user_start(user_id)
     
     if is_new_user:
         kb = MenuFactory.create_language_selection_keyboard()
@@ -113,9 +134,13 @@ async def start_message(message: Message):
         )
         return
     
+    db.record_user_start(user_id)
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
+    except ValueError:
+        await message.answer(storage.get_restart_message())
+        return
     except Exception as e:
         logger.error(f"Error loading user data for {user_id}: {e}")
         lang = "fa"
@@ -154,7 +179,7 @@ async def list_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
@@ -180,7 +205,7 @@ async def show_reminders_list(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
@@ -210,7 +235,7 @@ async def show_today_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
@@ -241,7 +266,7 @@ async def delete_reminder(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
         parts = message.text.split()
@@ -271,7 +296,7 @@ async def show_delete_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
@@ -302,7 +327,7 @@ async def show_edit_reminders(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
         calendar_type = data.get("settings", {}).get("calendar", "miladi")
@@ -334,7 +359,7 @@ async def show_menu(message: Message):
         await message_handler.handle_rate_limit(message)
         return
     try:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         
     except Exception as e:
@@ -352,9 +377,20 @@ async def handle_menu_buttons(message: Message):
         return
     
     is_new_user = db.is_new_user(user_id)
+    is_valid_user = db.is_valid_user(user_id, storage)
+    
+    if not is_valid_user:
+        try:
+            data = storage.secure_load(user_id)
+            lang = data.get("settings", {}).get("language", "fa")
+        except:
+            lang = "fa"
+        await message.answer(message_handler.t(lang, "update_notification"))
+        return
+    
     if not is_new_user and db.needs_start_after_restart(user_id):
         try:
-            data = storage.load(user_id)
+            data = storage.secure_load(user_id)
             lang = data.get("settings", {}).get("language", "fa")
         except:
             lang = "fa"
@@ -363,7 +399,7 @@ async def handle_menu_buttons(message: Message):
     
     if config.forced_join.get("enabled", False) and not admin_handler.is_admin(user_id):
         if not await admin_handler.check_user_membership(user_id):
-            data = storage.load(user_id)
+            data = storage.secure_load(user_id)
             lang = data.get("settings", {}).get("language", "fa")
             kb = await admin_handler.get_join_keyboard(lang)
             await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
@@ -371,11 +407,11 @@ async def handle_menu_buttons(message: Message):
     
     try:
         update_sent = await message_handler.update_checker.send_update_notification_if_needed(
-            message, user_id, storage.load(user_id).get("settings", {}).get("language", "fa"), message_handler.t
+            message, user_id, storage.secure_load(user_id).get("settings", {}).get("language", "fa"), message_handler.t
         )
         if update_sent:
             return
-        lang = storage.load(user_id).get("settings", {}).get("language", "fa")
+        lang = storage.secure_load(user_id).get("settings", {}).get("language", "fa")
         
         if message.text == message_handler.t(lang, "btn_admin") and admin_handler.is_admin(user_id):
             await admin_handler.show_admin_panel(message)
@@ -499,7 +535,7 @@ async def handle_check_membership(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
     
     if await admin_handler.check_user_membership(user_id):
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         await callback_query.message.delete()
         await callback_query.message.answer(message_handler.t(lang, "start"))
@@ -508,7 +544,7 @@ async def handle_check_membership(callback_query: CallbackQuery):
         await callback_query.message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
         await callback_query.answer()
     else:
-        data = storage.load(user_id)
+        data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         await callback_query.answer(message_handler.t(lang, "not_member_yet"), show_alert=True)
         try:

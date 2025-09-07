@@ -49,7 +49,7 @@ class AdminHandler:
             return
         
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             
             kb = MenuFactory.create_admin_panel(lang, self.t)
@@ -64,7 +64,7 @@ class AdminHandler:
             return
         
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             
             button_text = message.text
@@ -123,7 +123,7 @@ class AdminHandler:
             return
         
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             
             if self.user_manager.is_operation_active(user_id):

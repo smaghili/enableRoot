@@ -5,7 +5,7 @@ import time
 import datetime
 import json
 from config.config import Config
-from config.interfaces import IMessageHandler
+# Removed IMessageHandler import - not needed
 from utils.date_converter import DateConverter
 from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
@@ -16,7 +16,23 @@ try:
 except ImportError:
     jdatetime = None
 logger = logging.getLogger(__name__)
-class ReminderCallbackHandler(IMessageHandler):
+
+def validate_user(func):
+    async def wrapper(self, callback_query: CallbackQuery):
+        user_id = callback_query.from_user.id
+        try:
+            self.storage.secure_load(user_id)
+        except ValueError as e:
+            logger.warning(f"User validation failed for user {user_id}: {e}")
+            await callback_query.answer(self.storage.get_restart_message(), show_alert=True)
+            return
+        except Exception as e:
+            logger.error(f"Unexpected error in validate_user for user {user_id}: {e}")
+            await callback_query.answer()
+            return
+        return await func(self, callback_query)
+    return wrapper
+class ReminderCallbackHandler:
     def __init__(self, storage, db, ai, repeat_handler, locales, message_handler, session, config, admin_handler=None, log_manager=None):
         self.storage = storage
         self.db = db
@@ -32,6 +48,7 @@ class ReminderCallbackHandler(IMessageHandler):
         self.date_converter = DateConverter()
         self.update_checker = UpdateChecker(storage)
         self.comp_logger = ComprehensiveLogger()
+    
     def t(self, lang, key):
         return self.locales.get(lang, self.locales["en"]).get(key, key)
     def _calculate_correct_time(self, reminder_data: dict, user_calendar: str, user_timezone: str = "+03:30") -> str:
@@ -95,24 +112,41 @@ class ReminderCallbackHandler(IMessageHandler):
     async def handle_rate_limit(self, callback):
         try:
             user_id = callback.from_user.id
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             rate_limit_msg = self.t(lang, "rate_limit_exceeded")
             await callback.answer(rate_limit_msg, show_alert=True)
         except Exception as e:
             logger.error(f"Error in handle_rate_limit: {e}")
+    
     async def handle_message(self, message) -> None:
-        pass
+        return
+    
     async def handle_callback(self, callback: CallbackQuery) -> None:
         user_id = callback.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback)
             return
+        
+        setup_callbacks = ["setup_lang_", "setup_calendar_", "confirm_tz_"]
+        is_setup_callback = any(callback.data.startswith(prefix) for prefix in setup_callbacks)
+        is_new_user = self.db.is_new_user(user_id)
+        
+        if is_setup_callback:
+            if callback.data.startswith("setup_lang_"):
+                await self.handle_setup_language_selection(callback)
+                return
+            elif callback.data.startswith("setup_calendar_"):
+                await self.handle_setup_calendar_selection(callback)
+                return
+            elif callback.data.startswith("confirm_tz_"):
+                await self.handle_timezone_confirmation(callback)
+                return
+        
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             
-            # Skip update check for new users - they are in setup process
             is_new_user_check = self.db.is_new_user(user_id)
             if not is_new_user_check:
                 update_sent = await self.update_checker.send_update_notification_if_needed(callback, user_id, lang, self.t)
@@ -122,36 +156,35 @@ class ReminderCallbackHandler(IMessageHandler):
             if not self.update_checker.config.force_update_notification:
                 self.storage.update_last_activity(user_id)
             
+        except ValueError as e:
+            logger.warning(f"User validation failed in handle_callback for user {user_id}: {e}")
+            await callback.answer(self.storage.get_restart_message(), show_alert=True)
+            return
+        except PermissionError as e:
+            logger.warning(f"Permission denied in handle_callback for user {user_id}: {e}")
+            await callback.answer(self.storage.get_restart_message(), show_alert=True)
+            return
         except Exception as e:
-            logger.error(f"Error in handle_callback for user {user_id}: {e}")
+            logger.error(f"Unexpected error in handle_callback for user {user_id}: {e}")
             await callback.answer()
             return
-        setup_callbacks = ["setup_lang_", "setup_calendar_", "confirm_tz_"]
-        is_setup_callback = any(callback.data.startswith(prefix) for prefix in setup_callbacks)
-        is_new_user = self.db.is_new_user(user_id)
+        
         if not is_setup_callback and not is_new_user and self.db.needs_start_after_restart(user_id):
             await callback.answer(self.t(lang, "update_notification"), show_alert=True)
             return
         
-        # Route to specific handler based on callback data
-        if callback.data.startswith("setup_lang_"):
-            await self.handle_setup_language_selection(callback)
-        elif callback.data.startswith("lang_"):
+        if callback.data.startswith("lang_"):
             await self.handle_language_selection(callback)
         elif callback.data == "change_lang":
             await self.handle_change_language(callback)
         elif callback.data == "change_tz":
             await self.handle_change_timezone(callback)
-        elif callback.data.startswith("confirm_tz_"):
-            await self.handle_timezone_confirmation(callback)
         elif callback.data == "cancel_tz":
             await self.handle_timezone_cancel(callback)
         elif callback.data == "change_calendar":
             await self.handle_change_calendar(callback)
         elif callback.data.startswith("calendar_"):
             await self.handle_calendar_selection(callback)
-        elif callback.data.startswith("setup_calendar_"):
-            await self.handle_setup_calendar_selection(callback)
         elif callback.data.startswith(("stop_", "paid_", "taken_")):
             await self.handle_reminder_actions(callback)
         elif callback.data.startswith("delete_confirm_"):
@@ -173,7 +206,12 @@ class ReminderCallbackHandler(IMessageHandler):
         try:
             lang_code = callback_query.data.split("_")[2]
             if lang_code in self.locales:
-                self.storage.update_setting(user_id, "language", lang_code)
+                # Record user start now that they've selected a language
+                self.db.record_user_start(user_id)
+                data = self.storage.secure_load(user_id)
+                data["settings"]["language"] = lang_code
+                data["settings"].pop("calendar", None)
+                self.storage.save(user_id, data)
                 await callback_query.message.edit_text(
                     f"✅ {self.t(lang_code, 'language_selected')}\n\n"
                     f"🌍 {self.t(lang_code, 'setup_timezone_prompt')}"
@@ -187,6 +225,7 @@ class ReminderCallbackHandler(IMessageHandler):
             await callback_query.answer()
             return
         await callback_query.answer()
+    @validate_user
     async def handle_language_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -207,6 +246,7 @@ class ReminderCallbackHandler(IMessageHandler):
         await callback_query.answer()
         kb = MenuFactory.create_main_menu(lang_code, self.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
         await callback_query.message.answer(self.t(lang_code, "menu"), reply_markup=kb)
+    @validate_user
     async def handle_change_language(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -219,25 +259,27 @@ class ReminderCallbackHandler(IMessageHandler):
                 [InlineKeyboardButton(text="🇸🇦 العربية", callback_data="lang_ar")],
                 [InlineKeyboardButton(text="🇷🇺 Русский", callback_data="lang_ru")]
             ])
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             await callback_query.message.edit_text(self.t(lang, "choose_language"), reply_markup=kb)
             await callback_query.answer()
         except Exception as e:
             logger.error(f"Error in handle_change_language for user {user_id}: {e}")
             await callback_query.answer()
+    @validate_user
     async def handle_change_timezone(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback_query)
             return
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             self.message_handler.waiting_for_city[user_id] = True
             await callback_query.message.edit_text(self.t(lang, "enter_city_name"))
             await callback_query.answer()
         except Exception as e:
             logger.error(f"Error in handle_change_timezone for user {user_id}: {e}")
             await callback_query.answer()
+    @validate_user
     async def handle_timezone_confirmation(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -245,11 +287,11 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         try:
             timezone = callback_query.data.replace("confirm_tz_", "")
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             self.storage.update_setting(user_id, "timezone", timezone)
-            is_new_user = self.db.is_new_user(user_id)
-            if is_new_user:
+            is_in_setup = self.db.is_in_setup(user_id, self.storage)
+            if is_in_setup:
                 kb = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=self.t(lang, "calendar_shamsi"), callback_data="setup_calendar_shamsi")],
                     [InlineKeyboardButton(text=self.t(lang, "calendar_miladi"), callback_data="setup_calendar_miladi")],
@@ -267,10 +309,11 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_timezone_confirmation for user {user_id}: {e}")
             await callback_query.answer()
+    @validate_user
     async def handle_timezone_cancel(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             is_new_user = self.db.is_new_user(user_id)
             if is_new_user:
                 await callback_query.message.edit_text(self.t(lang, "timezone_cancelled"))
@@ -282,13 +325,14 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_timezone_cancel for user {user_id}: {e}")
             await callback_query.answer()
+    @validate_user
     async def handle_reminder_actions(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback_query)
             return
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             action, reminder_id = callback_query.data.split("_", 1)
             reminder_id = int(reminder_id)
         except (ValueError, Exception) as e:
@@ -336,13 +380,14 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error updating reminder {reminder_id} for user {user_id}: {e}")
             await callback_query.answer()
+    @validate_user
     async def handle_delete_confirmation(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback_query)
             return
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             reminder_id = int(callback_query.data.split("_")[2])
             user_reminders = self.db.list(user_id)
             reminder_exists = any(r[0] == reminder_id for r in user_reminders)
@@ -370,13 +415,14 @@ class ReminderCallbackHandler(IMessageHandler):
         
         await callback_query.message.edit_text(self.t(lang, "reminder_deleted").format(id=reminder_id))
         await callback_query.answer(self.t(lang, "delete_confirmed"))
+    @validate_user
     async def handle_edit_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback_query)
             return
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             reminder_id = int(callback_query.data.split("_")[2])
             user_reminders = self.db.list(user_id)
             reminder_exists = any(r[0] == reminder_id for r in user_reminders)
@@ -393,13 +439,14 @@ class ReminderCallbackHandler(IMessageHandler):
             self.t(lang, "reminder_selected").format(id=reminder_id)
         )
         await callback_query.answer()
+    @validate_user
     async def handle_confirm_cancel(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback_query)
             return
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
         except Exception as e:
             logger.error(f"Error in handle_confirm_cancel for user {user_id}: {e}")
@@ -595,10 +642,11 @@ class ReminderCallbackHandler(IMessageHandler):
                 await callback_query.message.edit_reply_markup(reply_markup=None)
                 await callback_query.message.answer(self.t(lang, "ask_more"), parse_mode="HTML", disable_web_page_preview=True)
         await callback_query.answer()
+    @validate_user
     async def handle_exit_edit(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             self.session.editing_reminders.pop(user_id, None)
             if user_id in self.session.pending:
@@ -609,13 +657,14 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_exit_edit for user {user_id}: {e}")
         await callback_query.answer()
+    @validate_user
     async def handle_change_calendar(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
             await self.handle_rate_limit(callback_query)
             return
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=self.t(lang, "calendar_shamsi"), callback_data="calendar_shamsi")],
                 [InlineKeyboardButton(text=self.t(lang, "calendar_miladi"), callback_data="calendar_miladi")],
@@ -626,6 +675,7 @@ class ReminderCallbackHandler(IMessageHandler):
         except Exception as e:
             logger.error(f"Error in handle_change_calendar for user {user_id}: {e}")
             await callback_query.answer()
+    @validate_user
     async def handle_calendar_selection(self, callback_query: CallbackQuery):
         user_id = callback_query.from_user.id
         if not self.rate_limit_check(user_id):
@@ -633,7 +683,7 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         try:
             calendar_type = callback_query.data.replace("calendar_", "")
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             calendar_names = {
                 "shamsi": self.t(lang, "calendar_shamsi"),
@@ -658,7 +708,7 @@ class ReminderCallbackHandler(IMessageHandler):
             return
         try:
             calendar_type = callback_query.data.replace("setup_calendar_", "")
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             
             # Set the calendar type

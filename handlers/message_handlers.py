@@ -58,7 +58,7 @@ class ReminderMessageHandler(IMessageHandler):
                 user_id = message_or_callback.from_user.id
             else:
                 return
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             rate_limit_msg = self.t(lang, "rate_limit_exceeded")
             if hasattr(message_or_callback, 'answer'):
@@ -111,9 +111,17 @@ class ReminderMessageHandler(IMessageHandler):
             return
         if not self.validate_user_input(message.text):
             return
+        
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
+        except ValueError:
+            await message.answer(self.storage.get_restart_message())
+            return
+        except Exception:
+            lang = "fa"
+            
+        try:
             
             update_sent = await self.update_checker.send_update_notification_if_needed(message, user_id, lang, self.t)
             if update_sent:
@@ -189,6 +197,9 @@ class ReminderMessageHandler(IMessageHandler):
             await self.handle_parsed_reminder(message, parsed, lang)
             if not self.update_checker.config.force_update_notification:
                 self.storage.update_last_activity(user_id)
+        except PermissionError:
+            await message.answer(self.storage.get_restart_message())
+            return
         except Exception as e:
             logger.error(f"Error in handle_message for user {user_id}: {e}")
 
@@ -198,7 +209,13 @@ class ReminderMessageHandler(IMessageHandler):
             await self.handle_rate_limit(callback)
             return
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
+        except ValueError:
+            await message.answer(self.storage.get_restart_message())
+            return
+        except Exception:
+            return
+        try:
             lang = data["settings"]["language"]
         except Exception as e:
             logger.error(f"Error in handle_callback for user {user_id}: {e}")
@@ -208,8 +225,11 @@ class ReminderMessageHandler(IMessageHandler):
 
     async def handle_city_input(self, message: Message):
         user_id = message.from_user.id
+        if not self.db.is_valid_user(user_id, self.storage):
+            await message.answer("لطفا جهت دریافت آپدیت ربات با ارسال دستور /start ربات را مجدد راه اندازی کنید🙏")
+            return
         try:
-            lang = self.storage.load(user_id)["settings"]["language"]
+            lang = self.storage.secure_load(user_id)["settings"]["language"]
             city_name = self.sanitize_input(message.text)
             if not city_name or len(city_name) > self.config.max_city_length:
                 await message.answer(self.t(lang, "timezone_error"))
@@ -222,8 +242,8 @@ class ReminderMessageHandler(IMessageHandler):
                 return
             city, timezone = timezone_info
             kb = MenuFactory.create_timezone_confirmation_keyboard(lang, self.t, timezone)
-            user_data = self.storage.load(user_id)
-            if user_id in self.waiting_for_city and self.db.is_new_user(user_id):
+            user_data = self.storage.secure_load(user_id)
+            if user_id in self.waiting_for_city and self.db.is_in_setup(user_id, self.storage):
                 confirmation_text = self.t(lang, "setup_timezone_confirmation").format(city=city, timezone=timezone)
             else:
                 confirmation_text = self.t(lang, "timezone_confirmation").format(city=city, timezone=timezone)
@@ -237,7 +257,13 @@ class ReminderMessageHandler(IMessageHandler):
         """Handle edit input from user"""
         user_id = message.from_user.id
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
+        except ValueError:
+            await message.answer(self.storage.get_restart_message())
+            return
+        except Exception:
+            return
+        try:
             lang = data["settings"]["language"]
             reminder_id = self.session.editing_reminders[user_id] 
             user_reminders = self.db.list(user_id)
@@ -323,7 +349,10 @@ class ReminderMessageHandler(IMessageHandler):
 
     async def handle_parsed_reminder(self, message: Message, parsed: Dict[str, Any], lang: str):
         user_id = message.from_user.id
-        data = self.storage.load(user_id)
+        if not self.db.is_valid_user(user_id, self.storage):
+            await message.answer("لطفا جهت دریافت آپدیت ربات با ارسال دستور /start ربات را مجدد راه اندازی کنید🙏")
+            return
+        data = self.storage.secure_load(user_id)
         calendar_type = data["settings"].get("calendar", "miladi")
         if "reminders" in parsed and isinstance(parsed["reminders"], list):
             summary_lines = [self.t(lang, "multiple_reminders_summary").format(count=len(parsed["reminders"]))]

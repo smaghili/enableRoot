@@ -185,7 +185,7 @@ class ReminderScheduler(IScheduler):
             if retry_count < 3:
                 dt_local = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
                 next_day = dt_local + datetime.timedelta(days=1)
-                user_data = self.json_storage.load(uid)
+                user_data = self.json_storage.secure_load(uid)
                 user_lang = user_data.get("settings", {}).get("language", "fa")
                 original_reminder = self.db.get_reminder_for_log(rid)
                 original_content = original_reminder[3] if original_reminder else f'یادآور {rid}'

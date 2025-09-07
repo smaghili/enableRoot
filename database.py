@@ -2,8 +2,11 @@ import sqlite3
 import threading
 import datetime
 import os
+import logging
 from urllib.parse import urlparse
 from utils.comprehensive_logger import ComprehensiveLogger
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -406,6 +409,51 @@ class Database:
             result = cur.fetchone()
             cur.close()
             return result is None
+    
+    def is_valid_user(self, user_id, storage):
+        """
+        Check if a user is valid by verifying they exist in database or have valid storage.
+        Returns True if user is valid, False otherwise.
+        """
+        with self.lock:
+            cur = self.conn.cursor()
+            try:
+                cur.execute("SELECT last_start_date FROM users WHERE user_id = ?", (user_id,))
+                db_result = cur.fetchone()
+                cur.close()
+                
+                import os
+                storage_file = storage.file(user_id)
+                has_storage = os.path.exists(storage_file)
+                
+                # User is valid if:
+                # 1. They exist in database, OR
+                # 2. They don't exist in DB but have valid storage file
+                is_valid = db_result is not None or (db_result is None and has_storage)
+                
+                if not is_valid:
+                    logger.warning(f"Invalid user {user_id}: db_exists={db_result is not None}, has_storage={has_storage}")
+                
+                return is_valid
+                
+            except Exception as e:
+                logger.error(f"Error checking user validity for {user_id}: {e}")
+                cur.close()
+                # In case of database error, allow access if storage file exists
+                import os
+                storage_file = storage.file(user_id)
+                return os.path.exists(storage_file)
+    
+    def is_in_setup(self, user_id, storage):
+        try:
+            data = storage.secure_load(user_id)
+            settings = data.get("settings", {})
+            has_language = settings.get("language")
+            has_timezone = settings.get("timezone")
+            has_calendar = settings.get("calendar")
+            return has_language and has_timezone and not has_calendar
+        except:
+            return False
 
     def delete_user(self, user_id):
         with self.lock, self.conn:

@@ -32,7 +32,7 @@ class AdminLogExportManager(BaseAdminManager):
     
     async def process_reminder_export(self, message: Message, reminder_id: int):
         user_id = message.from_user.id
-        data = self.storage.load(user_id)
+        data = self.storage.secure_load(user_id)
         lang = data["settings"]["language"]
         
         # Get comprehensive logs for this reminder

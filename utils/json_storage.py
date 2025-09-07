@@ -9,13 +9,43 @@ class JSONStorage:
     def __init__(self, path: str):
         self.path = path
         self.lock = threading.Lock()
+        self.db = None
+    
+    def set_db(self, db):
+        self.db = db
+    
+    def secure_load(self, user_id: int) -> Dict[str, Any]:
+        """
+        Securely load user data after validating user exists.
+        Raises ValueError if user is invalid (deleted or unauthorized).
+        """
+        if self.db and not self.db.is_valid_user(user_id, self):
+            raise ValueError("Invalid user - deleted or unauthorized")
+        return self.load(user_id)
+    
+    def get_restart_message(self, lang: str = "fa") -> str:
+        messages = {
+            "fa": "لطفا جهت دریافت آپدیت ربات با ارسال دستور /start ربات را مجدد راه اندازی کنید🙏",
+            "en": "Please restart the bot by sending /start command to receive updates🙏",
+            "ar": "يرجى إعادة تشغيل البوت بإرسال الأمر /start لتلقي التحديثات🙏",
+            "ru": "Пожалуйста, перезапустите бота, отправив команду /start для получения обновлений🙏"
+        }
+        return messages.get(lang, messages["fa"])
         os.makedirs(self.path, exist_ok=True)
         
     def file(self, user_id: int) -> str:
         return os.path.join(self.path, f"{user_id}.json")
         
     def load(self, user_id: int) -> Dict[str, Any]:
+        """
+        Load user data from storage file.
+        Creates default data if file doesn't exist.
+        Raises PermissionError if user is not valid.
+        """
         with self.lock:
+            # Security check: prevent deleted users from creating files
+            if self.db and not self.db.is_valid_user(user_id, self):
+                raise PermissionError(f"Access denied for user {user_id}")
             p = self.file(user_id)
             default_data = {
                 "user_id": user_id,

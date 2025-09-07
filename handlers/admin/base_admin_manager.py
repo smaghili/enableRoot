@@ -33,7 +33,7 @@ class BaseAdminManager(ABC):
     async def start_operation(self, message: Message, operation_key: str):
         user_id = message.from_user.id
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             self.active_operations.add(user_id)
             cancel_kb = self.create_cancel_keyboard(lang)
@@ -48,7 +48,7 @@ class BaseAdminManager(ABC):
     async def complete_operation(self, message: Message, success_message: str, **kwargs):
         user_id = message.from_user.id
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             self.active_operations.discard(user_id)
             admin_kb = self.create_admin_keyboard(lang)
@@ -63,7 +63,7 @@ class BaseAdminManager(ABC):
     async def handle_error(self, message: Message, error_key: str, **kwargs):
         user_id = message.from_user.id
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]  
             self.active_operations.discard(user_id)
             admin_kb = self.create_admin_keyboard(lang)

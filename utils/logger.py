@@ -45,7 +45,7 @@ class LogManager:
     
     async def _get_user_info(self, user_id):
         """Get user information"""
-        user_data = self.storage.load(user_id)
+        user_data = self.storage.secure_load(user_id)
         settings = user_data.get("settings", {})
         
         try:

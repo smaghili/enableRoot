@@ -188,7 +188,7 @@ class AdminForcedJoinManager:
             return
 
         try:
-            data = self.storage.load(user_id)
+            data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
 
             if callback.data == "forced_join_toggle":

@@ -14,7 +14,7 @@ def admin_operation(operation_name: str, success_message: str = None):
                 if result and success_message:
                     await self.complete_operation(message, success_message, **kwargs)
                 elif result:
-                    data = self.storage.load(user_id)
+                    data = self.storage.secure_load(user_id)
                     lang = data["settings"]["language"]
                     admin_kb = self.create_admin_keyboard(lang)
                     await message.answer("✅ Operation completed", reply_markup=admin_kb)
