@@ -56,13 +56,10 @@ class AdminUserDeletionManager(BaseAdminManager):
                     user_file = self.storage.file(target_user_id)
                     if os.path.exists(user_file):
                         os.remove(user_file)
-                        
                         try:
-                            user_reminders = self.db.list(target_user_id)
-                            for reminder_id, _, _, _, _, _, _ in user_reminders:
-                                self.db.update_status(reminder_id, "cancelled")
+                            self.db.delete_user(target_user_id)
                         except Exception as db_error:
-                            logger.error(f"Error deleting user reminders from DB: {db_error}")
+                            logger.error(f"Error deleting user from DB: {db_error}")
                         
                         await message.answer(self.t(lang, "user_deleted_success").format(user_id=target_user_display))
                         self.waiting_for_delete_user.discard(user_id)

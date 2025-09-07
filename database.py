@@ -407,6 +407,11 @@ class Database:
             cur.close()
             return result is None
 
+    def delete_user(self, user_id):
+        with self.lock, self.conn:
+            self.conn.execute("DELETE FROM users WHERE user_id = ?", (user_id,))
+            self.conn.execute("DELETE FROM reminders WHERE user_id = ?", (user_id,))
+
     def needs_start_after_restart(self, user_id):
         with self.lock:
             cur = self.conn.cursor()

@@ -119,6 +119,22 @@ async def start_message(message: Message):
     except Exception as e:
         logger.error(f"Error loading user data for {user_id}: {e}")
         lang = "fa"
+        default_data = {
+            "user_id": user_id,
+            "reminders": {"active": [], "completed": [], "cancelled": []},
+            "settings": {
+                "language": "fa",
+                "timezone": "+03:30",
+                "calendar": "shamsi",
+                "reminder_creation_count": 0
+            },
+            "activity": {"last_activity": datetime.datetime.now().isoformat()}
+        }
+        try:
+            storage.save(user_id, default_data)
+            logger.info(f"Created default user data for {user_id}")
+        except Exception as save_error:
+            logger.error(f"Failed to create default data for {user_id}: {save_error}")
     
     if config.forced_join.get("enabled", False):
         if not await admin_handler.check_user_membership(user_id):
