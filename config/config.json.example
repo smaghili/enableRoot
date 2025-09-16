@@ -26,6 +26,7 @@
       "inactive_days_threshold": 30,
       "force_update_notification": false
     },
+    "state_timeout_seconds": 600,
     "ai_logging": {
       "enabled": true,
       "database_path": "data/ai_logs.db",
