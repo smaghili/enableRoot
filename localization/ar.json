@@ -165,11 +165,31 @@
   "admin_error": "❌ خطأ في معالجة طلب المدير",
   "use_buttons": "يرجى استخدام أزرار البوت",
   "access_denied": "❌ ليس لديك صلاحية للوصول إلى هذا القسم",
+  "unauthorized_access": "❌ وصول غير مصرح به",
   "admin_reminder_id_prompt": "🔢 أدخل معرف التذكير الذي تريد الحصول على سجلاته:",
   "admin_no_logs_found": "❌ لم يتم العثور على سجلات للتذكير {reminder_id}",
   "admin_reminder_log_caption": "📊 سجلات كاملة للتذكير #{reminder_id}\n📁 الحجم: {size} KB",
   "admin_reminder_log_success": "✅ تم إرسال السجلات الكاملة للتذكير #{reminder_id}!",
-  "admin_invalid_reminder_id": "❌ معرف التذكير غير صحيح. يرجى إدخال رقم."
+  "admin_invalid_reminder_id": "❌ معرف التذكير غير صحيح. يرجى إدخال رقم.",
+  "admin_edit_prompts": "📝 تعديل المطالبات",
+  "admin_change_ai_model": "🤖 تغيير نموذج الذكاء الاصطناعي",
+  "admin_prompt_edit_menu": "📝 أي مطالبة تريد تعديلها؟",
+  "admin_current_prompt": "📝 مطالبة {type} الحالية:\n\n{prompt}\n\n💡 يرجى إرسال مطالبتك الجديدة:",
+  "admin_current_prompt_file": "📝 مطالبة {type} الحالية",
+  "admin_enter_new_prompt": "📎 أرسل ملف نصي للمطالبة الجديدة:",
+  "admin_prompt_change_warning": "⚠️ هل توافق على تغيير مطالبة {type}؟\n\n🚨 أي تغيير قد يؤثر على أداء البوت.",
+  "admin_prompt_updated": "✅ تم تحديث مطالبة {type} بنجاح!",
+  "admin_prompt_update_error": "❌ خطأ في تحديث المطالبة",
+  "admin_invalid_prompt": "❌ مطالبة غير صالحة",
+  "admin_ai_model_menu": "🤖 النموذج الحالي: {current}\n\nاختر النموذج الجديد:",
+  "admin_model_change_warning": "⚠️ هل توافق على تغيير نموذج الذكاء الاصطناعي؟\n\n📊 النموذج الحالي: {current}\n🔄 النموذج الجديد: {new}\n\n🚨 أي تغيير قد يؤثر على أداء البوت.",
+  "admin_model_updated": "✅ تم تغيير نموذج الذكاء الاصطناعي إلى {model}!",
+  "admin_model_update_error": "❌ خطأ في تغيير نموذج الذكاء الاصطناعي",
+  "admin_model_already_selected": "⚠️ النموذج {model} نشط حالياً",
+  "operation_cancelled": "❌ تم إلغاء العملية",
+  "prompt_add_reminder": "🔄 مطالبة إضافة التذكير",
+  "prompt_edit_reminder": "✏️ مطالبة تعديل التذكير",
+  "prompt_timezone_detection": "🌍 مطالبة اكتشاف المنطقة الزمنية"
 }
 
 

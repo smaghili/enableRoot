@@ -10,6 +10,8 @@ from .admin_forced_join_manager import AdminForcedJoinManager
 from .admin_user_deletion_manager import AdminUserDeletionManager
 from .admin_log_channel_manager import AdminLogChannelManager
 from .admin_log_export_manager import AdminLogExportManager
+from .admin_prompt_manager import AdminPromptManager
+from .admin_ai_model_manager import AdminAIModelManager
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,8 @@ class AdminHandler:
         self.user_deletion_manager = AdminUserDeletionManager(storage, db, config, locales)
         self.log_channel_manager = AdminLogChannelManager(storage, config, locales)
         self.log_export_manager = AdminLogExportManager(storage, config, locales, bot)
+        self.prompt_manager = AdminPromptManager(storage, config, locales, bot)
+        self.ai_model_manager = AdminAIModelManager(storage, config, locales)
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -89,6 +93,10 @@ class AdminHandler:
                 await self.log_channel_manager.handle_log_channel_setup(message, lang)
             elif button_text == self.t(lang, "admin_export_logs"):
                 await self.log_export_manager.handle_log_export_request(message)
+            elif button_text == self.t(lang, "admin_edit_prompts"):
+                await self.prompt_manager.handle_prompt_edit_menu(message, lang)
+            elif button_text == self.t(lang, "admin_change_ai_model"):
+                await self.ai_model_manager.handle_ai_model_menu(message, lang)
             elif button_text == self.t(lang, "cancel_operation"):
                 await self.handle_cancel_operation(message, lang)
             elif button_text == self.t(lang, "back"):
@@ -110,6 +118,8 @@ class AdminHandler:
         self.user_limit_manager.waiting_for_limit.discard(user_id)
         self.forced_join_manager.in_forced_join_menu.discard(user_id)
         self.log_export_manager.cancel_operation(user_id)
+        self.prompt_manager.cancel_operation(user_id)
+        self.ai_model_manager.cancel_operation(user_id)
         await self.show_admin_panel(message)
 
     async def handle_back_to_main(self, message: Message, lang: str):
@@ -144,6 +154,8 @@ class AdminHandler:
                 await self.log_channel_manager.process_log_channel(message, lang)
             elif self.log_export_manager.is_operation_active(user_id):
                 await self.log_export_manager.handle_reminder_id_input(message)
+            elif self.prompt_manager.is_operation_active(user_id):
+                await self.prompt_manager.process_prompt_edit(message, lang)
                 
         except Exception as e:
             logger.error(f"Error in handle_admin_message: {e}")
@@ -152,7 +164,8 @@ class AdminHandler:
         admin_buttons = [
             "admin_add_admin", "admin_remove_admin", "admin_general_stats", "admin_user_limit",
             "admin_broadcast", "admin_private_message", "admin_forced_join", "admin_delete_user",
-            "admin_log_channel", "admin_export_logs", "back", "cancel_operation"
+            "admin_log_channel", "admin_export_logs", "admin_edit_prompts", "admin_change_ai_model",
+            "back", "cancel_operation"
         ]
         return any(message_text == self.t(lang, btn) for btn in admin_buttons)
 

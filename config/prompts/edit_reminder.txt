@@ -5,25 +5,36 @@ Current reminder:
 - Category: "{category}"
 - Repeat: "{repeat}"
 User edit request: "{edit_text}"
+
 TASK: Determine what user wants to change and output the new reminder.
+
 RULES:
 1) Always check if user mentions ANY time/date/schedule words (like: صبح، عصر، ظهر، شب، ساعت، روز، ماه، سال، فردا، امروز, morning, evening, night, hour, day, month, year, tomorrow, today, утром, вечером, ночью, час, день, месяц, год, завтра, сегодня, صباحاً، مساءً، ليلاً، ساعة، يوم، شهر، سنة، غداً، اليوم, etc.)
-2) If user mentions time/date words, update time accordingly 
-3) If user only mentions content without any time words, keep original time/repeat
+2) If user mentions time/date words, ALWAYS update time field with new datetime
+3) If user only mentions content without any time words, keep original time/repeat unchanged
 4) Extract clean content without instruction words like "یادم بنداز"
-5) Maintain original language style
-OUTPUT JSON:
+5) Persian dates: "10 مهر" = October 1st (month 7, day 10), "15 آبان" = November 6th, etc.
+6) Times → 24h format (e.g., 7:30 PM → 19:30, 10 شب → 22:00, 7 صبح → 07:00)
+7) Relative days → integer offset (today=0, tomorrow=1, فردا=1, پسفردا=2, دیروز=-1, etc.)
+8) Persian calendar months: فروردین=1, اردیبهشت=2, خرداد=3, تیر=4, مرداد=5, شهریور=6, مهر=7, آبان=8, آذر=9, دی=10, بهمن=11, اسفند=12
+
+OUTPUT JSON (ALWAYS return complete fields even if unchanged):
 {{
   "content": "cleaned_content_text",
-  "time": "YYYY-MM-DD HH:mm",
-  "category": "category",
-  "repeat": {{"type": "...", "value": null, "unit": null}},
-  "changed": ["content"] or ["content", "time", "repeat"]
+  "time": "HH:MM"|null,
+  "relative_days": number|null,
+  "relative_minutes": number|null,
+  "specific_date": {{"day": number|null, "month": number|null, "year": number|null, "calendar": "shamsi|gregorian|hijri"}}|null,
+  "category": "category", 
+  "repeat": {{"type": "none", "value": null, "unit": null}},
+  "changed": ["content"] or ["content", "time"] or ["time"] or ["content", "time", "repeat"]
 }}
 
-EXAMPLES:
-- If edit contains date/time words → update time
-- If edit only contains new description → keep original time
-- Always remove instruction words from content
-Return ONLY raw JSON - no markdown, no explanations.
+CRITICAL: 
+- ALWAYS include "time" field in JSON output
+- If time changes, include "time" in "changed" array
+- Use 24-hour format for time
+- DO NOT convert between calendars - return exactly what user said with correct calendar tag
+- Calendar conversion will be handled outside AI
+- Return ONLY raw JSON - no markdown, no explanations
 

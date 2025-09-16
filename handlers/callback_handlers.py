@@ -483,11 +483,13 @@ class ReminderCallbackHandler:
                     user_name = "Unknown"
                     username = "Unknown"
                 
+                new_time = edit_result.get("time", original["time"])
+                logger.info(f"Updating reminder {reminder_id} with new time: {new_time}")
                 self.db.update_reminder(
                     reminder_id,
                     edit_result.get("category", original["category"]),
                     edit_result.get("content", original["content"]),
-                    edit_result.get("time", original["time"]),
+                    new_time,
                     edit_result.get("timezone", original["timezone"]),
                     edit_result.get("repeat", original["repeat"])
                 )
@@ -508,7 +510,7 @@ class ReminderCallbackHandler:
                 kb = MenuFactory.create_main_menu(lang, self.message_handler.t, self.admin_handler.is_admin(user_id) if self.admin_handler else False)
                 calendar_type = data["settings"].get("calendar", "miladi")
                 utc_time = edit_result.get("time", original["time"])
-                display_time = TimezoneManager.format_for_display(utc_time, data['settings']['timezone'], calendar_type)
+                display_time = TimezoneManager.format_for_display(utc_time, data['settings']['timezone'], calendar_type, lang)
                 await callback_query.message.delete()
                 await callback_query.message.answer(
                     self.t(lang, "edit_success_details").format(

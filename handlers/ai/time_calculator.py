@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import re
 from typing import Dict, Any
 from utils.date_parser import DateParser
 
@@ -130,9 +131,10 @@ class TimeCalculator:
                 return now.replace(hour=target_hour, minute=target_minute).strftime("%Y-%m-%d %H:%M")
             target_date = target_date.replace(hour=target_hour, minute=target_minute)
             if target_date < now:
-                target_date = target_date.replace(year=now.year)
-                if target_date <= now:
+                if target_date.date() < now.date():
                     target_date = target_date.replace(year=now.year + 1)
+                elif target_date.date() == now.date():
+                    target_date = target_date + datetime.timedelta(days=1)
             return self._convert_to_utc(target_date)
         
         repeat_data = reminder.get("repeat", {})

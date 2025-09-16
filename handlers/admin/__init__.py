@@ -6,6 +6,8 @@ from .admin_user_limit_manager import AdminUserLimitManager
 from .admin_forced_join_manager import AdminForcedJoinManager
 from .admin_user_deletion_manager import AdminUserDeletionManager
 from .admin_log_channel_manager import AdminLogChannelManager
+from .admin_prompt_manager import AdminPromptManager
+from .admin_ai_model_manager import AdminAIModelManager
 
 __all__ = [
     'AdminHandler',
@@ -15,5 +17,7 @@ __all__ = [
     'AdminUserLimitManager',
     'AdminForcedJoinManager',
     'AdminUserDeletionManager',
-    'AdminLogChannelManager'
+    'AdminLogChannelManager',
+    'AdminPromptManager',
+    'AdminAIModelManager'
 ]

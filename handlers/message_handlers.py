@@ -321,7 +321,7 @@ class ReminderMessageHandler(IMessageHandler):
             kb = MenuFactory.create_confirm_cancel_keyboard(lang, self.t)
             
             calendar_type = data["settings"].get("calendar", "miladi")
-            utc_time = edit_result.get("time", current_reminder["time"])
+            utc_time = edit_result.get("time") if edit_result.get("time") else current_reminder["time"]
             display_time = TimezoneManager.format_for_display(utc_time, data['settings']['timezone'], calendar_type, lang)
             preview_text = self.t(lang, "edit_preview").format(
                 id=reminder_id,

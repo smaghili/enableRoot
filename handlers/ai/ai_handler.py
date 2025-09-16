@@ -12,9 +12,10 @@ from utils.ai_database import AIDatabase
 from utils.comprehensive_logger import ComprehensiveLogger
 
 class AIHandler:
-    def __init__(self, key: str, model: str = "gpt-4o", config=None):
+    def __init__(self, key: str, model: str = "gpt-4o", config=None, storage=None):
         self.key = key
         self.model = model
+        self.storage = storage
         self.logger = logging.getLogger(__name__)
         self.prompt_manager = PromptManager()
         self.api_client = APIClient(key, model)
@@ -186,6 +187,15 @@ class AIHandler:
             obj = json.loads(content)
             self.logger.info(f"Edit analysis result: {obj}")
             self.reminder_validator.normalize_repeat_field(obj)
+            
+            if obj.get('time') and ':' in obj.get('time', ''):
+                user_data = self.storage.secure_load(user_id) if user_id else {}
+                user_calendar = user_data.get("settings", {}).get("calendar", "miladi")
+                calculated_time = self.time_calculator.calculate_reminder_time(obj, user_calendar, timezone)
+                if calculated_time:
+                    obj["time"] = calculated_time
+                    obj.pop('specific_date', None)
+            
             return obj
         except Exception as e:
             self.logger.error(f"Edit parsing error: {e}")

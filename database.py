@@ -195,10 +195,7 @@ class Database:
     
     def update_reminder(self, reminder_id, category, content, time, timezone, repeat):
         with self.lock, self.conn:
-            dt_local = datetime.datetime.strptime(time, "%Y-%m-%d %H:%M")
-            from utils.timezone_manager import TimezoneManager
-            dt_utc = dt_local - TimezoneManager.parse_timezone(timezone)
-            time_utc = dt_utc.strftime("%Y-%m-%d %H:%M")
+            time_utc = time
 
             self.conn.execute(
                 "update reminders set category=?, content=?, time=?, timezone=?, repeat=? where id=?",

@@ -46,7 +46,7 @@ db.set_app_restart_time()
 storage = JSONStorage(config.users_path)
 storage.set_db(db)
 log_manager = LogManager(bot, config, storage)
-ai = AIHandler(config.openrouter_key, config.ai_model, config)
+ai = AIHandler(config.openrouter_key, config.ai_model, config, storage)
 scheduler = ReminderScheduler(db, storage, bot, log_manager)
 repeat_handler = RepeatHandler()
 date_converter = DateConverter()
@@ -431,7 +431,9 @@ async def handle_menu_buttons(message: Message):
             user_id in admin_handler.user_limit_manager.waiting_for_limit or
             user_id in admin_handler.user_deletion_manager.waiting_for_delete_user or
             user_id in admin_handler.log_channel_manager.waiting_for_log_channel or
-            admin_handler.log_export_manager.is_operation_active(user_id)):
+            admin_handler.log_export_manager.is_operation_active(user_id) or
+            admin_handler.prompt_manager.is_operation_active(user_id) or
+            admin_handler.ai_model_manager.is_operation_active(user_id)):
             await admin_handler.handle_admin_message(message)
             return
         
@@ -530,18 +532,48 @@ async def handle_admin_removal_callbacks(callback_query: CallbackQuery):
 async def handle_forced_join_callbacks(callback_query: CallbackQuery):
     await admin_handler.handle_forced_join_callback(callback_query)
 
+@dp.callback_query(F.data.startswith(("edit_prompt_", "confirm_prompt_", "cancel_prompt_")))
+async def handle_prompt_edit_callbacks(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    try:
+        data = storage.secure_load(user_id)
+        lang = data.get("settings", {}).get("language", "fa")
+        if not admin_handler.is_admin(user_id):
+            await callback_query.answer(message_handler.t(lang, "unauthorized_access"), show_alert=True)
+            return   
+        if callback_query.data.startswith("edit_prompt_") or callback_query.data == "cancel_prompt_edit":
+            await admin_handler.prompt_manager.handle_prompt_edit_callback(callback_query, lang)
+        elif callback_query.data.startswith(("confirm_prompt_", "cancel_prompt_change")):
+            await admin_handler.prompt_manager.handle_prompt_confirmation(callback_query, lang)
+    except Exception as e:
+        logger.error(f"Error in prompt edit callback: {e}")
+
+@dp.callback_query(F.data.startswith(("select_model_", "confirm_model_", "cancel_model_")))
+async def handle_ai_model_callbacks(callback_query: CallbackQuery):
+    user_id = callback_query.from_user.id
+    try:
+        data = storage.secure_load(user_id)
+        lang = data.get("settings", {}).get("language", "fa")
+        if not admin_handler.is_admin(user_id):
+            await callback_query.answer(message_handler.t(lang, "unauthorized_access"), show_alert=True)
+            return 
+        if callback_query.data.startswith("select_model_") or callback_query.data == "cancel_model_change":
+            await admin_handler.ai_model_manager.handle_model_selection_callback(callback_query, lang)
+        elif callback_query.data.startswith(("confirm_model_", "cancel_model_confirmation")):
+            await admin_handler.ai_model_manager.handle_model_confirmation(callback_query, lang)
+    except Exception as e:
+        logger.error(f"Error in AI model callback: {e}")
+
 
 
 @dp.callback_query(F.data == "check_membership")
 async def handle_check_membership(callback_query: CallbackQuery):
     user_id = callback_query.from_user.id
-    
     if await admin_handler.check_user_membership(user_id):
         data = storage.secure_load(user_id)
         lang = data.get("settings", {}).get("language", "fa")
         await callback_query.message.delete()
-        await callback_query.message.answer(message_handler.t(lang, "start"))
-        
+        await callback_query.message.answer(message_handler.t(lang, "start")) 
         kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
         await callback_query.message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
         await callback_query.answer()
