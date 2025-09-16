@@ -71,7 +71,7 @@
   "timezone_changed": "✅ Timezone changed to {timezone}",
   "timezone_error": "❌ Could not detect timezone for this city. Please try again.",
   "max_reminders_reached": "❌ You have reached the maximum number of reminders ({max})",
-  "multiple_reminders_saved": "✅ {count} reminders saved:",
+  "multiple_reminders_saved": "✅ Done! Your reminder has been saved 🎉",
   "multiple_reminders_summary": "📋 {count} reminders detected:",
   "age_suffix": " {years} years old",
   "category_medicine": "💊 Medicine",

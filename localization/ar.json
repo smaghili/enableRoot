@@ -71,7 +71,7 @@
   "timezone_changed": "✅ تم تغيير المنطقة الزمنية إلى {timezone}",
   "timezone_error": "❌ لا يمكن تحديد المنطقة الزمنية لهذه المدينة. يرجى المحاولة مرة أخرى.",
   "max_reminders_reached": "❌ لقد وصلت إلى الحد الأقصى من التذكيرات ({max})",
-  "multiple_reminders_saved": "✅ تم حفظ {count} تذكيرات:",
+  "multiple_reminders_saved": "✅ تمام! تم حفظ تذكيرك 🎉",
   "multiple_reminders_summary": "📋 تم اكتشاف {count} تذكيرات:",
   "age_suffix": " {years} سنة",
   "category_medicine": "💊 دواء",

@@ -128,6 +128,23 @@ class ReminderCallbackHandler:
             await self.handle_rate_limit(callback)
             return
         
+        if callback.data == "new":
+            data = self.storage.secure_load(user_id)
+            lang = data["settings"]["language"]
+            creation_count = self.storage.increment_reminder_creation_count(user_id)
+            if creation_count <= self.config.detailed_prompt_count:
+                await callback.message.answer(self.t(lang, "new_reminder_detailed"), parse_mode="HTML", disable_web_page_preview=True)
+            else:
+                await callback.message.answer(self.t(lang, "new_reminder_simple"))
+            await callback.answer()
+            return
+        elif callback.data == "list":
+            from bot import show_reminders_list
+            fake_message = type('obj', (object,), {'from_user': callback.from_user, 'answer': callback.message.answer})
+            await show_reminders_list(fake_message)
+            await callback.answer()
+            return
+            
         setup_callbacks = ["setup_lang_", "setup_calendar_", "confirm_tz_"]
         is_setup_callback = any(callback.data.startswith(prefix) for prefix in setup_callbacks)
         is_new_user = self.db.is_new_user(user_id)
@@ -561,7 +578,13 @@ class ReminderCallbackHandler:
                         )
                     created_count += 1
                 await callback_query.message.edit_reply_markup(reply_markup=None)
-                await callback_query.message.answer(self.t(lang, "multiple_reminders_saved").format(count=created_count))
+                success_kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text=self.t(lang, "btn_list"), callback_data="list"),
+                        InlineKeyboardButton(text=self.t(lang, "btn_new"), callback_data="new")
+                    ]
+                ])
+                await callback_query.message.answer(self.t(lang, "multiple_reminders_saved").format(count=created_count), reply_markup=success_kb)
             else:
                 calendar_type = data["settings"].get("calendar", "miladi")
                 original_message = pending_data.get("original_message", "")

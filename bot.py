@@ -168,9 +168,11 @@ async def start_message(message: Message):
             return
     
     message_handler.update_checker.mark_user_as_updated(user_id)
-    await message.answer(message_handler.t(lang, "start"))
     kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
-    await message.answer(message_handler.t(lang, "menu"), reply_markup=kb)
+    start_text = message_handler.t(lang, "start")
+    menu_text = message_handler.t(lang, "menu")
+    combined_message = f"{start_text}\n\n{menu_text}"
+    await message.answer(combined_message, reply_markup=kb)
 
 @dp.message(Command("list"))
 async def list_reminders(message: Message):
@@ -462,7 +464,7 @@ async def handle_menu_buttons(message: Message):
         await show_today_reminders(message)
 
 
-@dp.callback_query(F.data.in_(["confirm", "cancel"]))
+@dp.callback_query(F.data.in_(["confirm", "cancel", "new", "list"]))
 async def process_callback(callback_query: CallbackQuery):
     await callback_handler.handle_callback(callback_query)
 

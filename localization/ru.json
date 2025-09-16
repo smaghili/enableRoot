@@ -71,7 +71,7 @@
   "timezone_changed": "✅ Часовой пояс изменен на {timezone}",
   "timezone_error": "❌ Не удалось определить часовой пояс для этого города. Попробуйте еще раз.",
   "max_reminders_reached": "❌ Вы достигли максимального количества напоминаний ({max})",
-  "multiple_reminders_saved": "✅ Сохранено {count} напоминаний:",
+  "multiple_reminders_saved": "✅ Готово! Ваше напоминание сохранено 🎉",
   "multiple_reminders_summary": "📋 Обнаружено {count} напоминаний:",
   "age_suffix": " {years} лет",
   "category_medicine": "💊 Лекарство",
