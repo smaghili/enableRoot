@@ -5,6 +5,8 @@ import os
 import logging
 from urllib.parse import urlparse
 from utils.comprehensive_logger import ComprehensiveLogger
+from config.config import Config
+from utils.timezone_manager import TimezoneManager
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +78,6 @@ class Database:
                 """
             )
             self._create_indexes()
-            # Ensure backward compatibility: add meta column if missing
             try:
                 self.conn.execute("ALTER TABLE reminders ADD COLUMN meta text")
             except Exception:
@@ -106,7 +107,6 @@ class Database:
             reminder_id = cursor.lastrowid
             if category == "birthday" and repeat == "yearly":
                 birthday_8am = dt_local.replace(hour=8, minute=0, second=0, microsecond=0)
-                from utils.timezone_manager import TimezoneManager
                 birthday_8am_utc = birthday_8am - TimezoneManager.parse_timezone(timezone)
                 self.conn.execute(
                     "update reminders set time=? where id=?",
@@ -166,7 +166,6 @@ class Database:
         with self.lock:
             cur = self.conn.cursor()
             now_utc = datetime.datetime.utcnow()
-            from utils.timezone_manager import TimezoneManager
             today_local = TimezoneManager.utc_to_local(now_utc.strftime("%Y-%m-%d %H:%M"), user_timezone)
             today_start = today_local.replace(hour=0, minute=0, second=0, microsecond=0)
             today_end = today_local.replace(hour=23, minute=59, second=59, microsecond=999999)
@@ -419,15 +418,9 @@ class Database:
                 db_result = cur.fetchone()
                 cur.close()
                 
-                import os
                 storage_file = storage.file(user_id)
                 has_storage = os.path.exists(storage_file)
-                
-                # User is valid if:
-                # 1. They exist in database, OR
-                # 2. They don't exist in DB but have valid storage file
                 is_valid = db_result is not None or (db_result is None and has_storage)
-                
                 if not is_valid:
                     logger.warning(f"Invalid user {user_id}: db_exists={db_result is not None}, has_storage={has_storage}")
                 
@@ -436,8 +429,6 @@ class Database:
             except Exception as e:
                 logger.error(f"Error checking user validity for {user_id}: {e}")
                 cur.close()
-                # In case of database error, allow access if storage file exists
-                import os
                 storage_file = storage.file(user_id)
                 return os.path.exists(storage_file)
     
@@ -458,6 +449,10 @@ class Database:
             self.conn.execute("DELETE FROM reminders WHERE user_id = ?", (user_id,))
 
     def needs_start_after_restart(self, user_id):
+        config = Config()
+        if not config.force_update_notification:
+            return False
+            
         with self.lock:
             cur = self.conn.cursor()
             cur.execute("SELECT last_start_date FROM users WHERE user_id = ?", (user_id,))
