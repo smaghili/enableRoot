@@ -7,10 +7,11 @@ Current reminder:
 User edit request: "{edit_text}"
 TASK: Determine what user wants to change and output the new reminder.
 RULES:
-1) If user only mentions new content (no time/schedule words), keep original time/repeat
-2) If user mentions time/schedule, update accordingly
-3) Extract clean content without instruction words
-4) Maintain original language style
+1) Always check if user mentions ANY time/date/schedule words (like: صبح، عصر، ظهر، شب، ساعت، روز، ماه، سال، فردا، امروز, morning, evening, night, hour, day, month, year, tomorrow, today, утром, вечером, ночью, час, день, месяц, год, завтра, сегодня, صباحاً، مساءً، ليلاً، ساعة، يوم، شهر، سنة، غداً، اليوم, etc.)
+2) If user mentions time/date words, update time accordingly 
+3) If user only mentions content without any time words, keep original time/repeat
+4) Extract clean content without instruction words like "یادم بنداز"
+5) Maintain original language style
 OUTPUT JSON:
 {{
   "content": "cleaned_content_text",
@@ -19,4 +20,10 @@ OUTPUT JSON:
   "repeat": {{"type": "...", "value": null, "unit": null}},
   "changed": ["content"] or ["content", "time", "repeat"]
 }}
+
+EXAMPLES:
+- If edit contains date/time words → update time
+- If edit only contains new description → keep original time
+- Always remove instruction words from content
 Return ONLY raw JSON - no markdown, no explanations.
+

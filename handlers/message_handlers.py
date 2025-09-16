@@ -12,6 +12,7 @@ from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
 from utils.update_checker import UpdateChecker
 from utils.comprehensive_logger import ComprehensiveLogger
+from utils.state_manager import StateManager, StateType
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +28,11 @@ class ReminderMessageHandler(IMessageHandler):
         self.admin_handler = admin_handler
         self.user_request_times = {}
         self.user_message_count = {}
-        self.waiting_for_city = {}
+        self.state_manager = StateManager(config.state_timeout_seconds)
         self.date_converter = DateConverter()
         self.update_checker = UpdateChecker(storage, db)
         self.comp_logger = ComprehensiveLogger()
+        
 
     def t(self, lang, key, **kwargs):
         text = self.locales.get(lang, self.locales["en"]).get(key, key)
@@ -81,6 +83,11 @@ class ReminderMessageHandler(IMessageHandler):
         if not isinstance(text, str):
             return ""
         return text.strip()[:self.config.max_content_length]
+    
+    def clear_all_user_states(self, user_id: int) -> None:
+        self.state_manager.clear_all_states(user_id)
+        if hasattr(self.session, 'editing_reminders'):
+            self.session.editing_reminders.pop(user_id, None)
 
     def get_button_action(self, message_text, user_lang):
         button_mappings = {
@@ -122,14 +129,18 @@ class ReminderMessageHandler(IMessageHandler):
             lang = "fa"
             
         try:
+            # Check and clear expired states first
+            self.state_manager.clear_expired_states(user_id)
             
             update_sent = await self.update_checker.send_update_notification_if_needed(message, user_id, lang, self.t)
             if update_sent:
                 return
             
-            if self.waiting_for_city.get(user_id, False):
+            # Modern state checking with automatic timeout
+            if self.state_manager.has_state(user_id, StateType.WAITING_FOR_CITY):
                 await self.handle_city_input(message)
                 return
+            
             
             # Check if admin is waiting for reminder ID
             if self.admin_handler and hasattr(self.admin_handler, 'log_export_manager'):
@@ -149,6 +160,9 @@ class ReminderMessageHandler(IMessageHandler):
             
             button_action = self.get_button_action(message.text, lang)
             if button_action:
+                # Clear states when user starts new action
+                self.clear_all_user_states(user_id)
+                
                 if button_action == "admin_export_logs":
                     if self.admin_handler and self.admin_handler.is_admin(user_id):
                         await self.admin_handler.handle_admin_button(message)

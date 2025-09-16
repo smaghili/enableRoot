@@ -166,7 +166,7 @@ async def start_message(message: Message):
             kb = await admin_handler.get_join_keyboard(lang)
             await message.answer(message_handler.t(lang, "forced_join_required"), reply_markup=kb)
             return
-    
+    message_handler.clear_all_user_states(user_id)
     message_handler.update_checker.mark_user_as_updated(user_id)
     kb = MenuFactory.create_main_menu(lang, message_handler.t, admin_handler.is_admin(user_id))
     start_text = message_handler.t(lang, "start")
@@ -568,12 +568,7 @@ async def cleanup_memory():
                 message_handler.user_request_times[user_id] = [t for t in message_handler.user_request_times[user_id] if now - t < 3600]
                 if not message_handler.user_request_times[user_id]:
                     del message_handler.user_request_times[user_id]
-            expired_waiting = []
-            for user_id in list(message_handler.waiting_for_city.keys()):
-                if message_handler.waiting_for_city[user_id] and user_id not in message_handler.user_request_times:
-                    expired_waiting.append(user_id)
-            for user_id in expired_waiting:
-                message_handler.waiting_for_city.pop(user_id, None)
+            message_handler.state_manager.cleanup_all_expired()
         except Exception as e:
             logger.error(f"Cleanup error: {e}")
 

@@ -5,12 +5,12 @@ import time
 import datetime
 import json
 from config.config import Config
-# Removed IMessageHandler import - not needed
 from utils.date_converter import DateConverter
 from utils.timezone_manager import TimezoneManager
 from utils.menu_factory import MenuFactory
 from utils.update_checker import UpdateChecker
 from utils.comprehensive_logger import ComprehensiveLogger
+from utils.state_manager import StateType
 try:
     import jdatetime
 except ImportError:
@@ -233,7 +233,7 @@ class ReminderCallbackHandler:
                     f"✅ {self.t(lang_code, 'language_selected')}\n\n"
                     f"🌍 {self.t(lang_code, 'setup_timezone_prompt')}"
                 )
-                self.message_handler.waiting_for_city[user_id] = True
+                self.message_handler.state_manager.set_state(user_id, StateType.WAITING_FOR_CITY)
             else:
                 await callback_query.answer()
                 return
@@ -290,7 +290,7 @@ class ReminderCallbackHandler:
             return
         try:
             lang = self.storage.secure_load(user_id)["settings"]["language"]
-            self.message_handler.waiting_for_city[user_id] = True
+            self.message_handler.state_manager.set_state(user_id, StateType.WAITING_FOR_CITY)
             await callback_query.message.edit_text(self.t(lang, "enter_city_name"))
             await callback_query.answer()
         except Exception as e:
@@ -334,7 +334,7 @@ class ReminderCallbackHandler:
             is_new_user = self.db.is_new_user(user_id)
             if is_new_user:
                 await callback_query.message.edit_text(self.t(lang, "timezone_cancelled"))
-                self.message_handler.waiting_for_city[user_id] = True
+                self.message_handler.state_manager.set_state(user_id, StateType.WAITING_FOR_CITY)
             else:
                 await callback_query.message.edit_text(self.t(lang, "timezone_cancelled"))
             

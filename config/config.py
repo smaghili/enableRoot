@@ -47,6 +47,7 @@ class Config:
         update_settings = self.config_data.get("bot", {}).get("update_notification", {})
         self.inactive_days_threshold: int = update_settings.get("inactive_days_threshold", 30)
         self.force_update_notification: bool = update_settings.get("force_update_notification", False)
+        self.state_timeout_seconds: int = self.config_data.get("bot", {}).get("state_timeout_seconds", 600)
         self.force_update_timestamp: str = update_settings.get("force_update_timestamp", "")
         ai_logging_settings = self.config_data.get("bot", {}).get("ai_logging", {})
         self.ai_logging_enabled: bool = ai_logging_settings.get("enabled", True)
