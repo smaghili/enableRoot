@@ -69,6 +69,7 @@
   "yes": "Yes ✅",
   "no": "No ❌",
   "timezone_changed": "✅ Timezone changed to {timezone}",
+  "timezone_changed_with_time": "✅ Great! So I understand that the current time is {current_time}.",
   "timezone_error": "❌ Could not detect timezone for this city. Please try again.",
   "max_reminders_reached": "❌ You have reached the maximum number of reminders ({max})",
   "multiple_reminders_saved": "✅ Done! Your reminder has been saved 🎉",

@@ -307,20 +307,26 @@ class ReminderCallbackHandler:
             data = self.storage.secure_load(user_id)
             lang = data["settings"]["language"]
             self.storage.update_setting(user_id, "timezone", timezone)
-            is_in_setup = self.db.is_in_setup(user_id, self.storage)
-            if is_in_setup:
+            
+            utc_now = datetime.datetime.utcnow()
+            utc_time_str = utc_now.strftime("%Y-%m-%d %H:%M")
+            local_time = TimezoneManager.utc_to_local(utc_time_str, timezone)
+            current_time = local_time.strftime("%H:%M")
+            
+            is_new_user = self.db.is_new_user(user_id)
+            if is_new_user:
                 kb = InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=self.t(lang, "calendar_shamsi"), callback_data="setup_calendar_shamsi")],
                     [InlineKeyboardButton(text=self.t(lang, "calendar_miladi"), callback_data="setup_calendar_miladi")],
                     [InlineKeyboardButton(text=self.t(lang, "calendar_qamari"), callback_data="setup_calendar_qamari")]
                 ])
                 await callback_query.message.edit_text(
-                    f"✅ {self.t(lang, 'timezone_changed').format(timezone=timezone)}\n\n"
+                    f"{self.t(lang, 'timezone_changed_with_time').format(current_time=current_time)}\n\n"
                     f"{self.t(lang, 'choose_calendar')}",
                     reply_markup=kb
                 )
             else:
-                success_text = self.t(lang, "timezone_changed").format(timezone=timezone)
+                success_text = self.t(lang, "timezone_changed_with_time").format(current_time=current_time)
                 await callback_query.message.edit_text(success_text)
             await callback_query.answer()
         except Exception as e:

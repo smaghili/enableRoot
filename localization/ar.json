@@ -69,6 +69,7 @@
   "yes": "نعم ✅",
   "no": "لا ❌",
   "timezone_changed": "✅ تم تغيير المنطقة الزمنية إلى {timezone}",
+  "timezone_changed_with_time": "✅ رائع! إذاً أفهم أن الوقت الحالي هو {current_time}.",
   "timezone_error": "❌ لا يمكن تحديد المنطقة الزمنية لهذه المدينة. يرجى المحاولة مرة أخرى.",
   "max_reminders_reached": "❌ لقد وصلت إلى الحد الأقصى من التذكيرات ({max})",
   "multiple_reminders_saved": "✅ تمام! تم حفظ تذكيرك 🎉",

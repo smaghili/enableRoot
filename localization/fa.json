@@ -70,6 +70,7 @@
   "yes": "بله ✅",
   "no": "خیر ❌",
   "timezone_changed": "✅ تایم‌زون به {timezone} تغییر یافت",
+  "timezone_changed_with_time": "✅ عالیه! پس فهمیدم که الان ساعت تو {current_time} هست.",
   "timezone_error": "❌ نتوانستم تایم‌زون این شهر را تشخیص دهم. لطفاً دوباره تلاش کنید.",
   "max_reminders_reached": "❌ شما به حداکثر تعداد یادآوری‌ها رسیده‌اید ({max})",
   "multiple_reminders_saved": "✅ تمام! یادآوری‌تان ثبت شد 🎉",
