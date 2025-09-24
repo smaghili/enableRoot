@@ -28,6 +28,7 @@ class ReminderMessageHandler(IMessageHandler):
         self.admin_handler = admin_handler
         self.user_request_times = {}
         self.user_message_count = {}
+        self.waiting_for_city = {}
         self.state_manager = StateManager(config.state_timeout_seconds)
         self.date_converter = DateConverter()
         self.update_checker = UpdateChecker(storage, db)
@@ -247,25 +248,25 @@ class ReminderMessageHandler(IMessageHandler):
             city_name = self.sanitize_input(message.text)
             if not city_name or len(city_name) > self.config.max_city_length:
                 await message.answer(self.t(lang, "timezone_error"))
-                self.waiting_for_city[user_id] = False
+                self.state_manager.clear_state(user_id, StateType.WAITING_FOR_CITY)
                 return
             timezone_info = await self.get_timezone_from_city(city_name, lang)
             if not timezone_info:
                 await message.answer(self.t(lang, "timezone_error"))
-                self.waiting_for_city[user_id] = False
+                self.state_manager.clear_state(user_id, StateType.WAITING_FOR_CITY)
                 return
             city, timezone = timezone_info
             kb = MenuFactory.create_timezone_confirmation_keyboard(lang, self.t, timezone)
             user_data = self.storage.secure_load(user_id)
-            if user_id in self.waiting_for_city and self.db.is_in_setup(user_id, self.storage):
+            if self.db.is_in_setup(user_id, self.storage):
                 confirmation_text = self.t(lang, "setup_timezone_confirmation").format(city=city, timezone=timezone)
             else:
                 confirmation_text = self.t(lang, "timezone_confirmation").format(city=city, timezone=timezone)
             await message.answer(confirmation_text, reply_markup=kb)
-            self.waiting_for_city[user_id] = False
+            self.state_manager.clear_state(user_id, StateType.WAITING_FOR_CITY)
         except Exception as e:
             logger.error(f"Error in handle_city_input for user {user_id}: {e}")
-            self.waiting_for_city[user_id] = False
+            self.state_manager.clear_state(user_id, StateType.WAITING_FOR_CITY)
 
     async def handle_edit_input(self, message: Message):
         """Handle edit input from user"""
