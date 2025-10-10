@@ -27,10 +27,11 @@ class TelegramNotificationStrategy(NotificationStrategy):
     
     async def send_notification(self, bot: Bot, user_id: int, reminder_data: Dict[str, Any], 
                               lang: str, t_func) -> bool:
+        reminder_id = reminder_data.get('id')
+        category = reminder_data.get('category', 'general')
+        content = reminder_data.get('content', 'No content')
+        
         try:
-            reminder_id = reminder_data.get('id')
-            category = reminder_data.get('category', 'general')
-            content = reminder_data.get('content', 'No content')
             reminder_type = ReminderFactory.create(category)   
             message_text = reminder_type.format_message(content, lang, t_func)
             keyboard = reminder_type.create_keyboard(reminder_id, lang, t_func)      
@@ -41,6 +42,7 @@ class TelegramNotificationStrategy(NotificationStrategy):
             )
             
             self.logger.info(f"Sent {category} reminder {reminder_id} to user {user_id}")
+            
             if self.log_manager:
                 await self.log_manager.send_reminder_log(
                     reminder_id, user_id, category, content, "sent", 
@@ -52,6 +54,7 @@ class TelegramNotificationStrategy(NotificationStrategy):
             
         except Exception as e:
             self.logger.error(f"Failed to send notification to user {user_id}: {e}")
+            
             try:
                 chat = await bot.get_chat(user_id)
                 user_name = chat.first_name or "Unknown"
@@ -61,9 +64,16 @@ class TelegramNotificationStrategy(NotificationStrategy):
                 username = "Unknown"
             
             self.comp_logger.log_event("notification_send_error", user_id, user_name, username, 
-                                     reminder_data.get('id'), success=False, error_message=str(e),
-                                     event_data={"category": reminder_data.get('category'), 
-                                               "content": reminder_data.get('content')})
+                                     reminder_id, success=False, error_message=str(e),
+                                     event_data={"category": category, "content": content})
+            
+            if self.log_manager:
+                await self.log_manager.send_reminder_log(
+                    reminder_id, user_id, category, content, "failed", 
+                    "", 
+                    content
+                )
+            
             return False
 
 
