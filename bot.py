@@ -14,7 +14,7 @@ from utils.date_converter import DateConverter
 from utils.display_helper import DisplayHelper
 from utils.security_utils import create_secure_directory, secure_file_permissions
 from utils.logger import LogManager
-from utils.startup_fixer import StartupFixer
+# from utils.startup_fixer import StartupFixer  # Disabled - birthday reminders should not be modified
 from utils.menu_factory import MenuFactory
 import json
 import os
@@ -610,10 +610,11 @@ async def main():
             config.set_restart_timestamp()
             logger.info(f"🔄 Restart timestamp set: {config.force_update_timestamp}")
         
-        logger.info("🔧 Running startup fix for overdue reminders...")
-        startup_fixer = StartupFixer(db, storage)
-        fixed_count = startup_fixer.fix_all_overdue_reminders()
-        logger.info(f"✅ Startup fix completed - {fixed_count} reminders fixed")
+        # Disabled startup fixer - birthday reminders should not be modified
+        # logger.info("🔧 Running startup fix for overdue reminders...")
+        # startup_fixer = StartupFixer(db, storage)
+        # fixed_count = startup_fixer.fix_all_overdue_reminders()
+        # logger.info(f"✅ Startup fix completed - {fixed_count} reminders fixed")
         
         asyncio.create_task(cleanup_memory())
         scheduler.start()
