@@ -261,9 +261,16 @@ class ReminderScheduler(IScheduler):
         except Exception as e:
             self.logger.error(f"Error getting original message from AI logs for reminder {rid}: {e}")
         
+        effective_category = category
+        if category == "birthday":
+            effective_category = self._get_birthday_notification_type(rid, uid)
+            if effective_category is None:
+                self.logger.info(f"Birthday notification already sent for this period, skipping reminder {rid}")
+                return
+        
         reminder_data = {
             'id': rid,
-            'category': category,
+            'category': effective_category,
             'content': safe_content,
             'repeat': repeat,
             'original_message': original_message
@@ -275,6 +282,69 @@ class ReminderScheduler(IScheduler):
         if not success:
             self.logger.error(f"Failed to send reminder {rid} to user {uid}")
             raise Exception(f"Notification failed for reminder {rid}")
+    
+    def _get_birthday_notification_type(self, rid, uid):
+        try:
+            with self.db.lock:
+                cur = self.db.conn.cursor()
+                cur.execute("SELECT time, timezone, meta FROM reminders WHERE id=?", (rid,))
+                row = cur.fetchone()
+                cur.close()
+            
+            if not row:
+                return "birthday"
+            
+            time_str, timezone, meta = row
+            from utils.timezone_manager import TimezoneManager
+            birthday_local = TimezoneManager.utc_to_local(time_str, timezone)
+            now_local = TimezoneManager.utc_to_local(
+                datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M"), 
+                timezone
+            )
+            
+            days_until_birthday = (birthday_local.date() - now_local.date()).days
+            
+            import json
+            meta_data = {}
+            if meta:
+                try:
+                    meta_data = json.loads(meta)
+                except:
+                    pass
+            
+            last_sent = meta_data.get('last_birthday_notification')
+            current_year = birthday_local.year
+            
+            if days_until_birthday >= 7 and last_sent != f"{current_year}_week":
+                meta_data['last_birthday_notification'] = f"{current_year}_week"
+                with self.db.lock:
+                    cur = self.db.conn.cursor()
+                    cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
+                    self.db.conn.commit()
+                    cur.close()
+                return "birthday_pre_week"
+            elif 3 <= days_until_birthday < 7 and last_sent != f"{current_year}_three":
+                meta_data['last_birthday_notification'] = f"{current_year}_three"
+                with self.db.lock:
+                    cur = self.db.conn.cursor()
+                    cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
+                    self.db.conn.commit()
+                    cur.close()
+                return "birthday_pre_three"
+            elif days_until_birthday < 3 and last_sent != f"{current_year}_day":
+                meta_data['last_birthday_notification'] = f"{current_year}_day"
+                with self.db.lock:
+                    cur = self.db.conn.cursor()
+                    cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
+                    self.db.conn.commit()
+                    cur.close()
+                return "birthday"
+            else:
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error determining birthday notification type for {rid}: {e}")
+            return "birthday"
 
     def _next_time(self, time_str: str, repeat: str, timezone: str = "+00:00") -> Optional[str]:
         try:

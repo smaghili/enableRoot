@@ -52,11 +52,8 @@ class BirthdayReminder(ReminderType):
         return "🎂"
     def get_category_name(self) -> str:
         return "birthday"
-    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
-                                callback_data=f"stop_{reminder_id}")]
-        ])
+    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> Optional[InlineKeyboardMarkup]:
+        return None
     def format_message(self, content: str, lang: str, t_func) -> str:
         main_msg = t_func(lang, "birthday_main_message").format(content=content)
         first_msg = t_func(lang, "birthday_first_congratulator")
@@ -68,11 +65,8 @@ class BirthdayWeekBeforeReminder(ReminderType):
         return "📅"
     def get_category_name(self) -> str:
         return "birthday_pre_week"
-    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
-                                callback_data=f"stop_{reminder_id}")]
-        ])
+    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> Optional[InlineKeyboardMarkup]:
+        return None
     def format_message(self, content: str, lang: str, t_func) -> str:
         return t_func(lang, "birthday_week_before").format(content=content)
     def validate_content(self, content: str) -> bool:
@@ -82,11 +76,8 @@ class BirthdayThreeDaysBeforeReminder(ReminderType):
         return "📅"
     def get_category_name(self) -> str:
         return "birthday_pre_three"
-    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> InlineKeyboardMarkup:
-        return InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t_func(lang, "installment_stop_reminder"), 
-                                callback_data=f"stop_{reminder_id}")]
-        ])
+    def create_keyboard(self, reminder_id: int, lang: str, t_func) -> Optional[InlineKeyboardMarkup]:
+        return None
     def format_message(self, content: str, lang: str, t_func) -> str:
         return t_func(lang, "birthday_three_days_before").format(content=content)
     def validate_content(self, content: str) -> bool:

@@ -97,7 +97,6 @@ class Database:
 
     def add(self, user_id, category, content, time, timezone, repeat, status="active", meta=None):
         with self.lock, self.conn:
-            # time is already in UTC from time_calculator
             time_utc = time
 
             cursor = self.conn.execute(
@@ -105,27 +104,6 @@ class Database:
                 (user_id, category, content, time_utc, timezone, repeat, status, meta),
             )
             reminder_id = cursor.lastrowid
-            if category == "birthday" and repeat == "yearly":
-                birthday_8am = dt_local.replace(hour=8, minute=0, second=0, microsecond=0)
-                birthday_8am_utc = birthday_8am - TimezoneManager.parse_timezone(timezone)
-                self.conn.execute(
-                    "update reminders set time=? where id=?",
-                    (birthday_8am_utc.strftime("%Y-%m-%d %H:%M"), reminder_id)
-                )
-                week_before = dt_local.replace(hour=0, minute=1, second=0, microsecond=0) - datetime.timedelta(days=7)
-                week_before_utc = week_before - TimezoneManager.parse_timezone(timezone)
-                self.conn.execute(
-                    "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
-                    (user_id, "birthday_pre_week", content,
-                     week_before_utc.strftime("%Y-%m-%d %H:%M"), timezone, "yearly", status),
-                )
-                three_days_before = dt_local.replace(hour=0, minute=1, second=0, microsecond=0) - datetime.timedelta(days=3)
-                three_days_before_utc = three_days_before - TimezoneManager.parse_timezone(timezone)
-                self.conn.execute(
-                    "insert into reminders(user_id,category,content,time,timezone,repeat,status) values(?,?,?,?,?,?,?)",
-                    (user_id, "birthday_pre_three", content,
-                     three_days_before_utc.strftime("%Y-%m-%d %H:%M"), timezone, "yearly", status),
-                )
             return reminder_id
 
     def get_user_details(self, user_id):

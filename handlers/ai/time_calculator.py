@@ -25,11 +25,13 @@ class TimeCalculator:
         except:
             return None, None
     
-    def _get_target_time(self, time_str: str, now: datetime.datetime) -> tuple:
+    def _get_target_time(self, time_str: str, now: datetime.datetime, default_hour: int = None) -> tuple:
         if time_str is not None:
             target_hour, target_minute = self.parse_time(time_str)
             if target_hour is not None and target_minute is not None:
                 return target_hour, target_minute
+        if default_hour is not None:
+            return default_hour, 0
         return now.hour, now.minute
     
     def _convert_to_utc(self, local_datetime: datetime.datetime) -> str:
@@ -118,8 +120,9 @@ class TimeCalculator:
         
         if day and month:
             time_str = reminder.get("time")
-            target_hour, target_minute = self._get_target_time(time_str, now)
             is_recurring_event = reminder.get("category") in ("birthday", "anniversary")
+            default_hour = 8 if is_recurring_event else None
+            target_hour, target_minute = self._get_target_time(time_str, now, default_hour=default_hour)
             date_data = {
                 "day": day,
                 "month": month,
