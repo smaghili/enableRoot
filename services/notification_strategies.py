@@ -45,7 +45,7 @@ class TelegramNotificationStrategy(NotificationStrategy):
             
             if self.log_manager:
                 await self.log_manager.send_reminder_log(
-                    reminder_id, user_id, category, content, "sent", 
+                    reminder_id, user_id, category, message_text, "sent", 
                     "", 
                     content
                 )
@@ -68,11 +68,21 @@ class TelegramNotificationStrategy(NotificationStrategy):
                                      event_data={"category": category, "content": content})
             
             if self.log_manager:
-                await self.log_manager.send_reminder_log(
-                    reminder_id, user_id, category, content, "failed", 
-                    "", 
-                    content
-                )
+                try:
+                    reminder_type = ReminderFactory.create(category)
+                    formatted_message = reminder_type.format_message(content, lang, t_func)
+                    await self.log_manager.send_reminder_log(
+                        reminder_id, user_id, category, formatted_message, "failed", 
+                        "", 
+                        content
+                    )
+                except Exception as log_error:
+                    self.logger.error(f"Failed to format message for log: {log_error}")
+                    await self.log_manager.send_reminder_log(
+                        reminder_id, user_id, category, content, "failed", 
+                        "", 
+                        content
+                    )
             
             return False
 

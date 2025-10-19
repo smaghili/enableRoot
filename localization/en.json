@@ -57,7 +57,7 @@
   "stats": "📊 Your Statistics:\n🟢 Active: {active}\n✅ Completed: {completed}",
   "ai_error": "😔 Unfortunately, I couldn't understand your text!\n\nBetter to tell me what to do + when:\n- Tomorrow 10 AM dentist\n- July 15 Parham's birthday\n\n💡 <a href=\"https://t.me/testbot23456/2\">I wrote more examples here+</a>",
   "birthday_week_before": "🎉 One week left until {content}'s birthday!",
-  "birthday_three_days_before": "🎈 Three days left until {content}'s birthday!",
+  "birthday_three_days_before": "🎉 Three days left until {content}'s birthday!",
   "birthday_main_message": "🎂 It's {content}'s birthday! 🎈",
   "birthday_first_congratulator": "🥇 Be the first to congratulate!",
   "medicine_reminder": "Medicine reminder: {content}",

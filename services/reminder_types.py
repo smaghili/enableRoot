@@ -58,6 +58,7 @@ class BirthdayReminder(ReminderType):
         main_msg = t_func(lang, "birthday_main_message").format(content=content)
         first_msg = t_func(lang, "birthday_first_congratulator")
         return f"{main_msg}\n{first_msg}"
+        return f"{main_msg}\n{first_msg}"
     def validate_content(self, content: str) -> bool:
         return len(content.strip()) > 0
 class BirthdayWeekBeforeReminder(ReminderType):

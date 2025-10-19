@@ -57,7 +57,7 @@
   "stats": "📊 إحصائياتك:\n🟢 نشط: {active}\n✅ مكتمل: {completed}",
   "ai_error": "😔 للأسف لم أستطع فهم نصك!\n\nمن الأفضل أن تقول ماذا أفعل + متى:\n- غداً الساعة 10 صباحاً طبيب الأسنان\n- 15 يوليو عيد ميلاد برهام\n\n💡 <a href=\"https://t.me/testbot23456/2\">كتبت المزيد من الأمثلة هنا+</a>",
   "birthday_week_before": "🎉 أسبوع واحد متبقي لعيد ميلاد {content}!",
-  "birthday_three_days_before": "🎈 ثلاثة أيام متبقية لعيد ميلاد {content}!",
+  "birthday_three_days_before": "🎉 ثلاثة أيام متبقية لعيد ميلاد {content}!",
   "birthday_main_message": "🎂 اليوم عيد ميلاد {content}! 🎈",
   "birthday_first_congratulator": "🥇 كن أول من يهنئه!",
   "medicine_reminder": "تذكير الدواء: {content}",

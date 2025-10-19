@@ -57,7 +57,7 @@
   "stats": "📊 Ваша статистика:\n🟢 Активные: {active}\n✅ Завершенные: {completed}",
   "ai_error": "😔 К сожалению, я не смог понять ваш текст!\n\nЛучше скажите что делать + когда:\n- Завтра 10 утра к зубному\n- 15 июля день рождения Пархама\n\n💡 <a href=\"https://t.me/testbot23456/2\">Больше примеров я написал здесь+</a>",
   "birthday_week_before": "🎉 Неделя осталась до дня рождения {content}!",
-  "birthday_three_days_before": "🎈 Три дня осталось до дня рождения {content}!",
+  "birthday_three_days_before": "🎉 Три дня осталось до дня рождения {content}!",
   "birthday_main_message": "🎂 Сегодня день рождения {content}! 🎈",
   "birthday_first_congratulator": "🥇 Будь первым, кто поздравит!",
   "medicine_reminder": "Напоминание о лекарстве: {content}",

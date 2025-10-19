@@ -58,7 +58,7 @@
 
   "ai_error": "😔 متاسفانه متن شما رو نتوانستم درک کنم!\n\nبهتره بگی چیکار کنم + چه وقت:\n- فردا ۱۰ صبح دندونپزشک\n- ۱۵ تیر تولد پرهام\n\n💡 <a href=\"https://t.me/testbot23456/2\">مثال‌های بیشتر رو اینجا+ نوشتم</a>",
   "birthday_week_before": "🎉 یک هفته مونده به تولد {content}!",
-  "birthday_three_days_before": "🎈 سه روز به تولد {content} مونده!",
+  "birthday_three_days_before": "🎉 سه روز به تولد {content} مونده!",
   "birthday_main_message": "🎂 تولد {content} هستش! 🎈",
   "birthday_first_congratulator": "🥇 اولین نفر تولدشو تبریک بگو.",
   "medicine_reminder": "یادآوری دارو: {content}",
