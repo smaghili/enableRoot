@@ -55,9 +55,9 @@ class ReminderScheduler(IScheduler):
         return text
 
     def start(self):
-        self.task = asyncio.get_event_loop().create_task(self._loop())
-        self.cleanup_task = asyncio.get_event_loop().create_task(self._cleanup_loop())
-        self.queue_processor_task = asyncio.get_event_loop().create_task(self._process_message_queue())
+        self.task = asyncio.create_task(self._loop())
+        self.cleanup_task = asyncio.create_task(self._cleanup_loop())
+        self.queue_processor_task = asyncio.create_task(self._process_message_queue())
 
     async def _loop(self):
         while True:
