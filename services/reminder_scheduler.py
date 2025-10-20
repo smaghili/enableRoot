@@ -156,10 +156,14 @@ class ReminderScheduler(IScheduler):
                 user_name, username = await self._get_user_info(uid)
                 self.comp_logger.log_event("reminder_error", uid, user_name, username, rid,
                                          success=False, error_message=str(e))
-                try:
-                    self.db.update_status(rid, "cancelled")
-                except Exception as db_error:
-                    self.logger.error(f"Failed to cancel reminder {rid}: {db_error}")
+                if "invalid" in str(e).lower() or "malformed" in str(e).lower():
+                    try:
+                        self.db.update_status(rid, "cancelled")
+                        self.logger.info(f"Cancelled reminder {rid} due to permanent error: {e}")
+                    except Exception as db_error:
+                        self.logger.error(f"Failed to cancel reminder {rid}: {db_error}")
+                else:
+                    self.logger.info(f"Reminder {rid} will be retried in next cycle")
 
     async def _handle_installment_reminder(self, rid, uid, time_str, repeat):
         try:
@@ -281,7 +285,7 @@ class ReminderScheduler(IScheduler):
         
         if not success:
             self.logger.error(f"Failed to send reminder {rid} to user {uid}")
-            raise Exception(f"Notification failed for reminder {rid}")
+            return
     
     def _get_birthday_notification_type(self, rid, uid):
         try:

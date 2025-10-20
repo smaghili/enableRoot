@@ -54,6 +54,31 @@ class TelegramNotificationStrategy(NotificationStrategy):
             
         except Exception as e:
             self.logger.error(f"Failed to send notification to user {user_id}: {e}")
+            if "Too Many Requests" in str(e) or "Flood control exceeded" in str(e):
+                import re
+                import asyncio
+                retry_match = re.search(r'retry after (\d+)', str(e))
+                if retry_match:
+                    retry_seconds = int(retry_match.group(1))
+                    self.logger.info(f"Rate limited, will retry after {retry_seconds} seconds")
+                    await asyncio.sleep(retry_seconds + 1)
+                    try:
+                        await bot.send_message(
+                            chat_id=user_id,
+                            text=message_text,
+                            reply_markup=keyboard
+                        )
+                        self.logger.info(f"Successfully sent {category} reminder {reminder_id} after retry")
+                        
+                        if self.log_manager:
+                            await self.log_manager.send_reminder_log(
+                                reminder_id, user_id, category, message_text, "sent", 
+                                "", 
+                                content
+                            )
+                        return True
+                    except Exception as retry_error:
+                        self.logger.error(f"Retry also failed for user {user_id}: {retry_error}")
             
             try:
                 chat = await bot.get_chat(user_id)
