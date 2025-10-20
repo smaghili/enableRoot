@@ -17,7 +17,9 @@ class ReminderScheduler(IScheduler):
         self.bot = bot
         self.task: Optional[asyncio.Task] = None
         self.cleanup_task: Optional[asyncio.Task] = None
-        self.processing_semaphore = asyncio.Semaphore(30)
+        self.processing_semaphore = asyncio.Semaphore(1)
+        self.message_queue = asyncio.Queue()
+        self.queue_processor_task = None
         self.logger = logging.getLogger(__name__)
         self.repeat_handler = RepeatHandler()
         self.reminder_factory = ReminderFactory()
@@ -55,6 +57,7 @@ class ReminderScheduler(IScheduler):
     def start(self):
         self.task = asyncio.get_event_loop().create_task(self._loop())
         self.cleanup_task = asyncio.get_event_loop().create_task(self._cleanup_loop())
+        self.queue_processor_task = asyncio.get_event_loop().create_task(self._process_message_queue())
 
     async def _loop(self):
         while True:
@@ -87,6 +90,120 @@ class ReminderScheduler(IScheduler):
             except Exception as e:
                 self.logger.error(f"Scheduler loop error: {e}")
                 await asyncio.sleep(60)
+    
+    async def _process_message_queue(self):
+        while True:
+            try:
+                message_data = await self.message_queue.get()
+                await asyncio.sleep(0.02)  # 50 messages per second for bots
+                await self._send_queued_message(message_data)
+                self.message_queue.task_done()
+            except Exception as e:
+                self.logger.error(f"Queue error: {e}")
+                await asyncio.sleep(5)
+    
+    async def _send_queued_message(self, message_data):
+        try:
+            rid = message_data['rid']
+            uid = message_data['uid']
+            category = message_data['category']
+            content = message_data['content']
+            repeat = message_data['repeat']
+            
+            user_name, username = await self._get_user_info(uid)
+            self.comp_logger.log_event("reminder_processing_start", uid, user_name, username, rid,
+                                     event_data={"category": category, "content": content})
+            
+            success = await self._send_reminder_direct(rid, uid, category, content, repeat)
+            
+            if success:
+                self.comp_logger.log_event("reminder_sent", uid, user_name, username, rid,
+                                         event_data={"category": category, "content": content})
+                await self._handle_post_send_logic(rid, uid, category, content, repeat, message_data.get('time_str', ''))
+            else:
+                self.logger.warning(f"Failed to send queued reminder {rid} to user {uid}")
+                
+        except Exception as e:
+            self.logger.error(f"Error processing queued message for reminder {rid}: {e}")
+    
+    async def _send_reminder_direct(self, rid, uid, category, content, repeat):
+        try:
+            user_lang = self.json_storage.get_user_language(uid)
+            safe_content = str(content)[:500] if content else "No content"
+        except Exception as e:
+            self.logger.error(f"Error getting user language for {uid}: {e}")
+            user_lang = "en"
+            safe_content = str(content)[:500] if content else "No content"
+        
+        original_message = ""
+        try:
+            import sqlite3
+            ai_db_path = getattr(self.config, 'ai_database_path', "data/ai_logs.db") if hasattr(self, 'config') else "data/ai_logs.db"
+            with sqlite3.connect(ai_db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT original_message FROM ai_logs WHERE parsed_result LIKE ? AND original_message IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
+                    (f'%{safe_content}%',)
+                )
+                result = cursor.fetchone()
+                if result and result[0]:
+                    original_message = result[0]
+        except Exception as e:
+            self.logger.error(f"Error getting original message from AI logs for reminder {rid}: {e}")
+        
+        effective_category = category
+        if category == "birthday":
+            effective_category = self._get_birthday_notification_type(rid, uid)
+            if effective_category is None:
+                self.logger.info(f"Birthday notification already sent for this period, skipping reminder {rid}")
+                return True
+        
+        reminder_data = {
+            'id': rid,
+            'category': effective_category,
+            'content': safe_content,
+            'repeat': repeat,
+            'original_message': original_message
+        }
+        
+        return await self.notification_context.send_notification(
+            self.bot, uid, reminder_data, user_lang, self.t
+        )
+    
+    async def _handle_post_send_logic(self, rid, uid, category, content, repeat, time_str):
+        try:
+            user_name, username = await self._get_user_info(uid)
+            
+            if category == "installment":
+                await self._handle_installment_reminder(rid, uid, time_str, repeat)
+            else:
+                repeat_pattern = self.repeat_handler.from_json(repeat)
+                if repeat_pattern.type == "none":
+                    self.db.update_status(rid, "completed")
+                    self.comp_logger.log_event("reminder_completed", uid, user_name, username, rid,
+                                             event_data={"reason": "one_time_reminder"})
+                    self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
+                else:
+                    try:
+                        with self.db.lock:
+                            cur = self.db.conn.cursor()
+                            cur.execute("select timezone from reminders where id=?", (rid,))
+                            row = cur.fetchone()
+                            cur.close()
+                        tz = row[0] if row else "+00:00"
+                    except Exception as e:
+                        self.logger.error(f"Error getting timezone for reminder {rid}: {e}")
+                        tz = "+00:00"
+                    new_time = self._next_time(time_str, repeat, tz)
+                    if new_time:
+                        self.db.update_time(rid, new_time)
+                        self.comp_logger.log_event("reminder_rescheduled", uid, user_name, username, rid,
+                                                 event_data={"new_time": new_time, "repeat_pattern": repeat})
+                        self.logger.info(f"Updated recurring reminder {rid} to {new_time}")
+                    else:
+                        self.logger.error(f"Failed to calculate next time for reminder {rid}")
+                        self.logger.warning(f"Reminder {rid} will remain active for manual review")
+        except Exception as e:
+            self.logger.error(f"Error in post-send logic for reminder {rid}: {e}")
                 
     def _validate_reminder_data(self, rid, uid, cat, content, time_str, repeat) -> bool:
         if not all([rid, uid, cat, content, time_str, repeat]):
@@ -110,60 +227,21 @@ class ReminderScheduler(IScheduler):
             return "Unknown", "Unknown"
 
     async def _process_reminder(self, rid, uid, cat, content, time_str, repeat):
-        async with self.processing_semaphore:
-            try:
-                user_name, username = await self._get_user_info(uid)
-                self.comp_logger.log_event("reminder_processing_start", uid, user_name, username, rid,
-                                         event_data={"category": cat, "content": content})
-                
-                await self._send_reminder(rid, uid, cat, content, repeat)
-                
-                self.comp_logger.log_event("reminder_sent", uid, user_name, username, rid,
-                                         event_data={"category": cat, "content": content})
-                if cat == "installment":
-                    await self._handle_installment_reminder(rid, uid, time_str, repeat)
-                else:
-                    repeat_pattern = self.repeat_handler.from_json(repeat)
-                    if repeat_pattern.type == "none":
-                        self.db.update_status(rid, "completed")
-                        self.comp_logger.log_event("reminder_completed", uid, user_name, username, rid,
-                                                 event_data={"reason": "one_time_reminder"})
-                        self.logger.info(f"Completed one-time reminder {rid} for user {uid}")
-                    else:
-                        try:
-                            with self.db.lock:
-                                cur = self.db.conn.cursor()
-                                cur.execute("select timezone from reminders where id=?", (rid,))
-                                row = cur.fetchone()
-                                cur.close()
-                            tz = row[0] if row else "+00:00"
-                        except Exception as e:
-                            self.logger.error(f"Error getting timezone for reminder {rid}: {e}")
-                            tz = "+00:00"
-                        new_time = self._next_time(time_str, repeat, tz)
-                        if new_time:
-                            self.db.update_time(rid, new_time)
-                            self.comp_logger.log_event("reminder_rescheduled", uid, user_name, username, rid,
-                                                     event_data={"new_time": new_time, "repeat_pattern": repeat})
-                            self.logger.info(f"Updated recurring reminder {rid} to {new_time}")
-                        else:
-                            self.logger.error(f"Failed to calculate next time for reminder {rid}")
-                            self.db.update_status(rid, "cancelled")
-                            self.comp_logger.log_event("reminder_cancelled", uid, user_name, username, rid,
-                                                     success=False, error_message="Failed to calculate next time")
-            except Exception as e:
-                self.logger.error(f"Error processing reminder {rid}: {e}")
-                user_name, username = await self._get_user_info(uid)
-                self.comp_logger.log_event("reminder_error", uid, user_name, username, rid,
-                                         success=False, error_message=str(e))
-                if "invalid" in str(e).lower() or "malformed" in str(e).lower():
-                    try:
-                        self.db.update_status(rid, "cancelled")
-                        self.logger.info(f"Cancelled reminder {rid} due to permanent error: {e}")
-                    except Exception as db_error:
-                        self.logger.error(f"Failed to cancel reminder {rid}: {db_error}")
-                else:
-                    self.logger.info(f"Reminder {rid} will be retried in next cycle")
+        try:
+            message_data = {
+                'rid': rid,
+                'uid': uid,
+                'category': cat,
+                'content': content,
+                'repeat': repeat,
+                'time_str': time_str
+            }
+            await self.message_queue.put(message_data)
+        except Exception as e:
+            self.logger.error(f"Error queuing reminder {rid}: {e}")
+            user_name, username = await self._get_user_info(uid)
+            self.comp_logger.log_event("reminder_error", uid, user_name, username, rid,
+                                     success=False, error_message=str(e))
 
     async def _handle_installment_reminder(self, rid, uid, time_str, repeat):
         try:
@@ -241,51 +319,6 @@ class ReminderScheduler(IScheduler):
             except Exception as e:
                 self.logger.error(f"Cleanup error: {e}")
 
-    async def _send_reminder(self, rid, uid, category, content, repeat):
-        try:
-            user_lang = self.json_storage.get_user_language(uid)
-            safe_content = str(content)[:500] if content else "No content"
-        except Exception as e:
-            self.logger.error(f"Error getting user language for {uid}: {e}")
-            user_lang = "en"
-            safe_content = str(content)[:500] if content else "No content"
-        
-        original_message = ""
-        try:
-            import sqlite3
-            ai_db_path = getattr(self.config, 'ai_database_path', "data/ai_logs.db") if hasattr(self, 'config') else "data/ai_logs.db"
-            with sqlite3.connect(ai_db_path) as conn:
-                cursor = conn.execute(
-                    "SELECT original_message FROM ai_logs WHERE parsed_result LIKE ? AND original_message IS NOT NULL ORDER BY timestamp DESC LIMIT 1",
-                    (f'%{safe_content}%',)
-                )
-                result = cursor.fetchone()
-                if result and result[0]:
-                    original_message = result[0]
-        except Exception as e:
-            self.logger.error(f"Error getting original message from AI logs for reminder {rid}: {e}")
-        
-        effective_category = category
-        if category == "birthday":
-            effective_category = self._get_birthday_notification_type(rid, uid)
-            if effective_category is None:
-                self.logger.info(f"Birthday notification already sent for this period, skipping reminder {rid}")
-                return
-        
-        reminder_data = {
-            'id': rid,
-            'category': effective_category,
-            'content': safe_content,
-            'repeat': repeat,
-            'original_message': original_message
-        }
-        success = await self.notification_context.send_notification(
-            self.bot, uid, reminder_data, user_lang, self.t
-        )
-        
-        if not success:
-            self.logger.error(f"Failed to send reminder {rid} to user {uid}")
-            return
     
     def _get_birthday_notification_type(self, rid, uid):
         try:
@@ -400,3 +433,5 @@ class ReminderScheduler(IScheduler):
             self.task.cancel()
         if self.cleanup_task and not self.cleanup_task.done():
             self.cleanup_task.cancel()
+        if self.queue_processor_task and not self.queue_processor_task.done():
+            self.queue_processor_task.cancel()
