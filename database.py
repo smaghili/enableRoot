@@ -186,16 +186,22 @@ class Database:
                 """select id,user_id,category,content,time,timezone,repeat
                    from reminders
                    where status='active'
-                   and datetime(time) <= datetime(?)
+                   and (
+                       datetime(time) <= datetime(?)
+                       OR (category='birthday' AND datetime(time) <= datetime(?, '+7 days'))
+                   )
                    order by time asc
                    limit ?""",
-                (now_utc.strftime("%Y-%m-%d %H:%M"), limit)
+                (now_utc.strftime("%Y-%m-%d %H:%M"), now_utc.strftime("%Y-%m-%d %H:%M"), limit)
             )
             items = []
             for rid, uid, cat, content, time_utc_str, tz, repeat in cur.fetchall():
                 try:
                     dt_utc = datetime.datetime.strptime(time_utc_str, "%Y-%m-%d %H:%M")
-                    if dt_utc <= now_utc:
+                    if cat == 'birthday':
+                        if dt_utc <= now_utc + datetime.timedelta(days=7):
+                            items.append((rid, uid, cat, content, time_utc_str, tz, repeat))
+                    elif dt_utc <= now_utc:
                         items.append((rid, uid, cat, content, time_utc_str, tz, repeat))
                 except (ValueError, TypeError):
                     continue
