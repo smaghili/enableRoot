@@ -92,12 +92,15 @@ class ReminderScheduler(IScheduler):
                 await asyncio.sleep(60)
     
     async def _process_message_queue(self):
+        await asyncio.sleep(0.1)
         while True:
             try:
                 message_data = await self.message_queue.get()
-                await asyncio.sleep(0.02)  # 50 messages per second for bots
+                await asyncio.sleep(0.02)
                 await self._send_queued_message(message_data)
                 self.message_queue.task_done()
+            except asyncio.CancelledError:
+                break
             except Exception as e:
                 self.logger.error(f"Queue error: {e}")
                 await asyncio.sleep(5)
