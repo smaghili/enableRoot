@@ -371,14 +371,20 @@ class ReminderScheduler(IScheduler):
                     self.db.conn.commit()
                     cur.close()
                 return "birthday_pre_three"
-            elif days_until_birthday == 0 and last_sent != f"{current_year}_day":
-                meta_data['last_birthday_notification'] = f"{current_year}_day"
-                with self.db.lock:
-                    cur = self.db.conn.cursor()
-                    cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
-                    self.db.conn.commit()
-                    cur.close()
-                return "birthday"
+            elif days_until_birthday == 0:
+                if birthday_local.hour == 0 and birthday_local.minute == 1:
+                    if now_local.hour < 8:
+                        return None
+                if last_sent != f"{current_year}_day":
+                    meta_data['last_birthday_notification'] = f"{current_year}_day"
+                    with self.db.lock:
+                        cur = self.db.conn.cursor()
+                        cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
+                        self.db.conn.commit()
+                        cur.close()
+                    return "birthday"
+                else:
+                    return None
             else:
                 return None
                 

@@ -121,8 +121,13 @@ class TimeCalculator:
         if day and month:
             time_str = reminder.get("time")
             is_recurring_event = reminder.get("category") in ("birthday", "anniversary")
-            default_hour = 8 if is_recurring_event else None
-            target_hour, target_minute = self._get_target_time(time_str, now, default_hour=default_hour)
+            if time_str is not None:
+                target_hour, target_minute = self._get_target_time(time_str, now, default_hour=None)
+            else:
+                if is_recurring_event:
+                    target_hour, target_minute = 0, 1
+                else:
+                    target_hour, target_minute = now.hour, now.minute
             date_data = {
                 "day": day,
                 "month": month,
