@@ -356,6 +356,9 @@ class ReminderScheduler(IScheduler):
             current_year = birthday_local.year
             
             if days_until_birthday == 7 and last_sent != f"{current_year}_week":
+                if birthday_local.hour == 0 and birthday_local.minute == 1:
+                    if now_local.hour > 0 or now_local.minute > 5:
+                        return None
                 meta_data['last_birthday_notification'] = f"{current_year}_week"
                 with self.db.lock:
                     cur = self.db.conn.cursor()
@@ -364,6 +367,9 @@ class ReminderScheduler(IScheduler):
                     cur.close()
                 return "birthday_pre_week"
             elif days_until_birthday == 3 and last_sent != f"{current_year}_three":
+                if birthday_local.hour == 0 and birthday_local.minute == 1:
+                    if now_local.hour > 0 or now_local.minute > 5:
+                        return None
                 meta_data['last_birthday_notification'] = f"{current_year}_three"
                 with self.db.lock:
                     cur = self.db.conn.cursor()
