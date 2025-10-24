@@ -378,10 +378,10 @@ class ReminderScheduler(IScheduler):
                     cur.close()
                 return "birthday_pre_three"
             elif days_until_birthday == 0:
-                if birthday_local.hour == 0 and birthday_local.minute == 1:
+                if birthday_local.hour == 8:
                     if now_local.hour < 8:
                         return None
-                    if now_local.hour > 8 or (now_local.hour == 8 and now_local.minute > 1):
+                    if now_local.hour > 8 or (now_local.hour == 8 and now_local.minute > 10):
                         return None
                 if last_sent != f"{current_year}_day":
                     meta_data['last_birthday_notification'] = f"{current_year}_day"
