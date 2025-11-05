@@ -77,8 +77,15 @@ class ReminderScheduler(IScheduler):
                     tasks = []
                     for rid, uid, cat, content, time_str, tz, repeat in due_reminders:
                         if self._validate_reminder_data(rid, uid, cat, content, time_str, repeat):
-                            task = self._process_reminder(rid, uid, cat, content, time_str, repeat)
-                            tasks.append(task)
+                            should_send = self._should_send_reminder(rid, uid, cat, time_str, tz, now)
+                            if should_send:
+                                task = self._process_reminder(rid, uid, cat, content, time_str, repeat)
+                                tasks.append(task)
+                            elif should_send is False:
+                                if cat == "birthday":
+                                    await self._skip_and_reschedule_birthday(rid, uid, time_str, repeat, tz)
+                                else:
+                                    await self._skip_and_reschedule(rid, uid, time_str, repeat, tz)
                     
                     if tasks:
                         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -207,7 +214,114 @@ class ReminderScheduler(IScheduler):
                         self.logger.warning(f"Reminder {rid} will remain active for manual review")
         except Exception as e:
             self.logger.error(f"Error in post-send logic for reminder {rid}: {e}")
+    
+    async def _skip_and_reschedule(self, rid, uid, time_str, repeat, tz):
+        try:
+            repeat_pattern = self.repeat_handler.from_json(repeat)
+            if repeat_pattern.type == "none":
+                self.db.update_status(rid, "completed")
+                self.logger.info(f"Skipped expired one-time reminder {rid}")
+            else:
+                new_time = self._next_time(time_str, repeat, tz)
+                if new_time:
+                    self.db.update_time(rid, new_time)
+                    self.logger.info(f"Skipped expired reminder {rid}, rescheduled to {new_time}")
+                else:
+                    self.db.update_status(rid, "completed")
+                    self.logger.warning(f"Could not reschedule reminder {rid}, marked as completed")
+        except Exception as e:
+            self.logger.error(f"Error skipping and rescheduling reminder {rid}: {e}")
+    
+    async def _skip_and_reschedule_birthday(self, rid, uid, time_str, repeat, tz):
+        try:
+            from utils.timezone_manager import TimezoneManager
+            
+            birthday_local = TimezoneManager.utc_to_local(time_str, tz)
+            now_local = TimezoneManager.utc_to_local(
+                datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M"), 
+                tz
+            )
+            
+            if birthday_local.date() < now_local.date():
+                new_time = self._next_time(time_str, repeat, tz)
+                if new_time:
+                    self.db.update_time(rid, new_time)
+                    
+                    with self.db.lock:
+                        cur = self.db.conn.cursor()
+                        cur.execute("SELECT meta FROM reminders WHERE id=?", (rid,))
+                        row = cur.fetchone()
+                        meta_data = {}
+                        if row and row[0]:
+                            try:
+                                import json
+                                meta_data = json.loads(row[0])
+                            except:
+                                pass
+                        
+                        if 'last_birthday_notification' in meta_data:
+                            del meta_data['last_birthday_notification']
+                        
+                        cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
+                        self.db.conn.commit()
+                        cur.close()
+                    
+                    self.logger.info(f"Skipped expired birthday reminder {rid}, rescheduled to next year: {new_time}")
+                else:
+                    self.logger.error(f"Could not reschedule birthday reminder {rid}")
+            else:
+                self.logger.info(f"Birthday reminder {rid} is for today, keeping current schedule")
                 
+        except Exception as e:
+            self.logger.error(f"Error skipping and rescheduling birthday reminder {rid}: {e}")
+                
+    def _should_send_reminder(self, rid, uid, cat, time_str, tz, now_utc) -> bool:
+        try:
+            from utils.timezone_manager import TimezoneManager
+            
+            reminder_utc = datetime.datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+            reminder_local = TimezoneManager.utc_to_local(time_str, tz)
+            now_local = TimezoneManager.utc_to_local(now_utc.strftime("%Y-%m-%d %H:%M"), tz)
+            
+            reminder_local = reminder_local.replace(second=0, microsecond=0)
+            now_local = now_local.replace(second=0, microsecond=0)
+            
+            if cat == "birthday":
+                days_until_birthday = (reminder_local.date() - now_local.date()).days
+                
+                if days_until_birthday == 7:
+                    target_time = reminder_local.replace(hour=0, minute=1)
+                    if now_local.date() == target_time.date() and now_local.hour == 0 and now_local.minute >= 1 and now_local.minute <= 5:
+                        return True
+                    return False
+                elif days_until_birthday == 3:
+                    target_time = reminder_local.replace(hour=0, minute=1)
+                    if now_local.date() == target_time.date() and now_local.hour == 0 and now_local.minute >= 1 and now_local.minute <= 5:
+                        return True
+                    return False
+                elif days_until_birthday == 1:
+                    target_time = reminder_local.replace(hour=0, minute=1)
+                    if now_local.date() == target_time.date() and now_local.hour == 0 and now_local.minute >= 1 and now_local.minute <= 5:
+                        return True
+                    return False
+                elif days_until_birthday == 0:
+                    target_time = reminder_local.replace(hour=8, minute=0)
+                    if now_local.date() == target_time.date() and now_local.hour == 8 and now_local.minute <= 5:
+                        return True
+                    return False
+                else:
+                    return False
+            else:
+                time_diff_minutes = int((now_local - reminder_local).total_seconds() / 60)
+                if time_diff_minutes < 0:
+                    return False
+                if time_diff_minutes > 5:
+                    return False
+                return True
+        except Exception as e:
+            self.logger.error(f"Error checking if reminder {rid} should be sent: {e}")
+            return False
+
     def _validate_reminder_data(self, rid, uid, cat, content, time_str, repeat) -> bool:
         if not all([rid, uid, cat, content, time_str, repeat]):
             self.logger.warning(f"Invalid reminder data: {rid}, {uid}, {cat}, {content}, {time_str}, {repeat}")
@@ -356,9 +470,11 @@ class ReminderScheduler(IScheduler):
             current_year = birthday_local.year
             
             if days_until_birthday == 7 and last_sent != f"{current_year}_week":
-                if birthday_local.hour == 0 and birthday_local.minute == 1:
-                    if now_local.hour > 0 or now_local.minute > 5:
-                        return None
+                target_time = birthday_local.replace(hour=0, minute=1)
+                if now_local.date() != target_time.date():
+                    return None
+                if now_local.hour > 0 or (now_local.hour == 0 and now_local.minute > 5):
+                    return None
                 meta_data['last_birthday_notification'] = f"{current_year}_week"
                 with self.db.lock:
                     cur = self.db.conn.cursor()
@@ -367,9 +483,11 @@ class ReminderScheduler(IScheduler):
                     cur.close()
                 return "birthday_pre_week"
             elif days_until_birthday == 3 and last_sent != f"{current_year}_three":
-                if birthday_local.hour == 0 and birthday_local.minute == 1:
-                    if now_local.hour > 0 or now_local.minute > 5:
-                        return None
+                target_time = birthday_local.replace(hour=0, minute=1)
+                if now_local.date() != target_time.date():
+                    return None
+                if now_local.hour > 0 or (now_local.hour == 0 and now_local.minute > 5):
+                    return None
                 meta_data['last_birthday_notification'] = f"{current_year}_three"
                 with self.db.lock:
                     cur = self.db.conn.cursor()
@@ -377,12 +495,25 @@ class ReminderScheduler(IScheduler):
                     self.db.conn.commit()
                     cur.close()
                 return "birthday_pre_three"
+            elif days_until_birthday == 1 and last_sent != f"{current_year}_one":
+                target_time = birthday_local.replace(hour=0, minute=1)
+                if now_local.date() != target_time.date():
+                    return None
+                if now_local.hour > 0 or (now_local.hour == 0 and now_local.minute > 5):
+                    return None
+                meta_data['last_birthday_notification'] = f"{current_year}_one"
+                with self.db.lock:
+                    cur = self.db.conn.cursor()
+                    cur.execute("UPDATE reminders SET meta=? WHERE id=?", (json.dumps(meta_data), rid))
+                    self.db.conn.commit()
+                    cur.close()
+                return "birthday_pre_one"
             elif days_until_birthday == 0:
-                if birthday_local.hour == 8:
-                    if now_local.hour < 8:
-                        return None
-                    if now_local.hour > 8 or (now_local.hour == 8 and now_local.minute > 10):
-                        return None
+                target_time = birthday_local.replace(hour=8, minute=0)
+                if now_local.date() != target_time.date():
+                    return None
+                if now_local.hour < 8 or now_local.hour > 8 or (now_local.hour == 8 and now_local.minute > 5):
+                    return None
                 if last_sent != f"{current_year}_day":
                     meta_data['last_birthday_notification'] = f"{current_year}_day"
                     with self.db.lock:
@@ -422,8 +553,11 @@ class ReminderScheduler(IScheduler):
                 
                 if (unit == "minutes" or unit == "minute") and value > 0:
                     diff_minutes = int((now_local - dt_local).total_seconds() / 60)
-                    periods_passed = (diff_minutes // value) + 1
-                    next_dt_local = dt_local + datetime.timedelta(minutes=periods_passed * value)
+                    if diff_minutes < 0:
+                        next_dt_local = dt_local
+                    else:
+                        periods_passed = (diff_minutes // value) + 1
+                        next_dt_local = dt_local + datetime.timedelta(minutes=periods_passed * value)
                 else:
                     while next_dt_local <= now_local:
                         next_dt_local = self.repeat_handler.calculate_next_time(next_dt_local, repeat_pattern)
